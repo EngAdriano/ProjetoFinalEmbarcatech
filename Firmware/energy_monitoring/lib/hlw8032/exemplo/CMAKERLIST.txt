@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.13)
+
+# Importa o SDK
+include(pico_sdk_import.cmake)
+
+# Nome do projeto
+project(hlw8032_pico_project C CXX ASM)
+
+# Inicializa o SDK
+pico_sdk_init()
+
+# Cria o executável com os arquivos do projeto
+add_executable(hlw8032_pico
+    main.c
+    hlw8032.c
+)
+
+# Inclui diretórios de headers
+target_include_directories(hlw8032_pico PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+
+# Linka as bibliotecas necessárias
+target_link_libraries(hlw8032_pico
+    pico_stdlib
+    hardware_uart
+)
+
+# Habilita saída extra (uf2, bin, etc.)
+pico_add_extra_outputs(hlw8032_pico)
