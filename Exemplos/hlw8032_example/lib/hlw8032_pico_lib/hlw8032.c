@@ -31,11 +31,74 @@ void hlw8032_init(hlw8032_t *dev, uart_inst_t *uart_id, uint rx_pin, uint baudra
     dev->calib.p_coef = DEFAULT_P_COEF;
 
     uart_init(dev->uart, baudrate);
+    gpio_set_function(0, GPIO_FUNC_UART);
     gpio_set_function(rx_pin, GPIO_FUNC_UART);
-    uart_set_format(dev->uart, 8, 1, UART_PARITY_NONE);
+    uart_set_format(dev->uart, 8, 1, UART_PARITY_EVEN); // UART_PARITY_NONE, UART_PARITY_EVEN, UART_PARITY_ODD
+
     uart_set_fifo_enabled(dev->uart, false);
 }
 
+bool hlw8032_read_frame(hlw8032_t *dev) {
+    uint8_t b;
+    int timeout = 0;
+
+    // Espera pelo primeiro byte 0x55
+    while (true) {
+        if (uart_is_readable(dev->uart)) {
+            b = uart_getc(dev->uart);
+            if (b == 0x55) break;
+        }
+        if (timeout++ > 10000) return false; // timeout total
+        tight_loop_contents();
+    }
+
+    // Segundo byte precisa ser 0x5A
+    timeout = 0;
+    while (!uart_is_readable(dev->uart)) {
+        if (timeout++ > 10000) return false;
+        tight_loop_contents();
+    }
+    b = uart_getc(dev->uart);
+    if (b != 0x5A) return false;
+
+    frame_buf[0] = 0x55;
+    frame_buf[1] = 0x5A;
+
+    // Ler o restante dos 22 bytes
+    for (int i = 2; i < HLW_FRAME_SIZE; i++) {
+        timeout = 0;
+        while (!uart_is_readable(dev->uart)) {
+            if (timeout++ > 20000) return false;
+            tight_loop_contents();
+        }
+        frame_buf[i] = uart_getc(dev->uart);
+    }
+
+    // Checksum
+    uint8_t checksum = 0;
+    for (int i = 2; i < HLW_FRAME_SIZE - 1; i++)
+        checksum += frame_buf[i];
+    checksum = (~checksum) + 1;
+
+    if (checksum != frame_buf[HLW_FRAME_SIZE - 1]) {
+        printf("Checksum inválido: esperado 0x%02X, recebido 0x%02X\n",
+               checksum, frame_buf[HLW_FRAME_SIZE - 1]);
+        return false;
+    }
+
+    dev->voltage_raw = (frame_buf[2] << 16) | (frame_buf[3] << 8) | frame_buf[4];
+    dev->current_raw = (frame_buf[5] << 16) | (frame_buf[6] << 8) | frame_buf[7];
+    dev->power_raw   = (frame_buf[8] << 16) | (frame_buf[9] << 8) | frame_buf[10];
+    dev->energy_raw  = (frame_buf[11] << 16) | (frame_buf[12] << 8) | frame_buf[13];
+    dev->pf_raw      = frame_buf[14];
+
+    hlw8032_process_data(dev);
+    dev->last_update = get_absolute_time();
+    return true;
+}
+
+
+/*
 bool hlw8032_read_frame(hlw8032_t *dev) {
     if (uart_is_readable(dev->uart)) {
         if (uart_getc(dev->uart) != HLW_HEADER1) return false;
@@ -70,7 +133,7 @@ bool hlw8032_read_frame(hlw8032_t *dev) {
         return true;
     }
     return false;
-}
+}*/
 
 void hlw8032_process_data(hlw8032_t *dev) {
     dev->voltage = (float)dev->voltage_raw / dev->calib.v_coef;

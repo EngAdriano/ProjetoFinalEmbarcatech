@@ -4,6 +4,7 @@
 #include "pico/stdlib.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "hardware/uart.h"
 
 typedef struct {
     float v_ref;

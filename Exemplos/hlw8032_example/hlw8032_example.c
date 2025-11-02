@@ -11,7 +11,10 @@ hlw8032_t hlw8032;
 
 int main()
 {
-    stdio_init_all();
+   //stdio_init_all();
+    stdio_usb_init();
+
+    hlw8032_init(&hlw8032, uart0, 1, 4800);
 
     // Initialise the Wi-Fi chip
     if (cyw43_arch_init()) {
@@ -33,14 +36,13 @@ int main()
         printf("IP address %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
 
-    hlw8032_init(&hlw8032, uart0, 1, 4800);
-
     while (true) {
+
         if(hlw8032_read_frame(&hlw8032)) {
             hlw8032_print_data(&hlw8032);
         } else {
             printf("Falha ao ler dados do HLW8032\n");
-        }   
+        }  
         sleep_ms(1000);
     }
 }
