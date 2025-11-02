@@ -1,8 +1,12 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
+#include "hlw8032.h"
 
+#define WIFI_SSID "Lu e Deza"
+#define WIFI_PASSWORD "liukin1208"
 
+hlw8032_t hlw8032;
 
 
 int main()
@@ -19,7 +23,7 @@ int main()
     cyw43_arch_enable_sta_mode();
 
     printf("Connecting to Wi-Fi...\n");
-    if (cyw43_arch_wifi_connect_timeout_ms("Your Wi-Fi SSID", "Your Wi-Fi Password", CYW43_AUTH_WPA2_AES_PSK, 30000)) {
+    if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
         printf("failed to connect.\n");
         return 1;
     } else {
@@ -29,8 +33,14 @@ int main()
         printf("IP address %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
 
+    hlw8032_init(&hlw8032, uart0, 1, 4800);
+
     while (true) {
-        printf("Hello, world!\n");
+        if(hlw8032_read_frame(&hlw8032)) {
+            hlw8032_print_data(&hlw8032);
+        } else {
+            printf("Falha ao ler dados do HLW8032\n");
+        }   
         sleep_ms(1000);
     }
 }

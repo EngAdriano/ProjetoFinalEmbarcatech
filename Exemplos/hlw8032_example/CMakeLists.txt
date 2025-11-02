@@ -35,7 +35,10 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(hlw8032_example hlw8032_example.c )
+add_executable(hlw8032_example 
+            hlw8032_example.c
+            lib/hlw8032_pico_lib/hlw8032.c
+)
 
 pico_set_program_name(hlw8032_example "hlw8032_example")
 pico_set_program_version(hlw8032_example "0.1")
@@ -51,10 +54,15 @@ target_link_libraries(hlw8032_example
 # Add the standard include files to the build
 target_include_directories(hlw8032_example PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/inc
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/lib/hlw8032_pico_lib
+
 )
 
 # Add any user requested libraries
-target_link_libraries(hlw8032_example 
+target_link_libraries(hlw8032_example
+        hardware_uart
         pico_cyw43_arch_lwip_threadsafe_background
         )
 
