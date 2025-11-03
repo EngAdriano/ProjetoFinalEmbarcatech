@@ -1,0 +1,16 @@
+.program uart_rx_inverted
+; UART RX invertido (idle baixo)
+; 8 bits de dados + 1 paridade + 1 stop
+
+.side_set 1
+
+.wrap_target
+wait 0 pin
+set x, 9
+set y, 8
+bitloop:
+    in pins, 1 [7]
+    jmp x-- bitloop
+    in pins, 1 [7]
+    push
+.wrap
