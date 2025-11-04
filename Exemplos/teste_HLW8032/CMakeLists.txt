@@ -47,6 +47,7 @@ pico_enable_stdio_uart(teste_HLW8032 0)
 # Inclui bibliotecas padrão e de hardware necessárias
 target_link_libraries(teste_HLW8032
     pico_stdlib
+    hardware_uart
 )
 
 # Inclui diretório local (para achar o .h do PIO)
