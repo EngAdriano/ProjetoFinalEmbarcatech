@@ -38,7 +38,8 @@ pico_sdk_init()
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(energy_monitoring 
-        energy_monitoring.c 
+        energy_monitoring.c
+        lib/wifi_manager/wifi_manager.c 
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -58,6 +59,8 @@ target_link_libraries(energy_monitoring
 # Add the standard include files to the build
 target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/lib/wifi_manager
 )
 
 # Add any user requested libraries
