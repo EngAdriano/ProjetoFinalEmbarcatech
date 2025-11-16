@@ -44,8 +44,7 @@ int main()
     vTaskStartScheduler();
 
     while (true) {
-        printf("Hello, world!\n");
-        sleep_ms(1000);
+        tight_loop_contents();
     }
 }
 
