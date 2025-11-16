@@ -15,9 +15,9 @@ if(WIN32)
 else()
     set(USERHOME $ENV{HOME})
 endif()
-set(sdkVersion 2.1.0)
-set(toolchainVersion 13_3_Rel1)
-set(picotoolVersion 2.1.0)
+set(sdkVersion 2.2.0)
+set(toolchainVersion 14_2_Rel1)
+set(picotoolVersion 2.2.0-a4)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
@@ -28,9 +28,6 @@ set(PICO_BOARD pico_w CACHE STRING "Board type")
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-# Pull in FreeRTOS Kernel
-include(${CMAKE_CURRENT_LIST_DIR}/FreeRTOS/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
-
 project(energy_monitoring C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
@@ -38,9 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(energy_monitoring 
-        energy_monitoring.c 
-)
+add_executable(energy_monitoring energy_monitoring.c )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
 pico_set_program_version(energy_monitoring "0.1")
@@ -51,10 +46,7 @@ pico_enable_stdio_usb(energy_monitoring 1)
 
 # Add the standard library to the build
 target_link_libraries(energy_monitoring
-        pico_stdlib
-        FreeRTOS-Kernel
-        FreeRTOS-Kernel-Heap4
-)
+        pico_stdlib)
 
 # Add the standard include files to the build
 target_include_directories(energy_monitoring PRIVATE
@@ -63,14 +55,8 @@ target_include_directories(energy_monitoring PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(energy_monitoring 
-        hardware_spi
-        hardware_i2c
         pico_cyw43_arch_lwip_threadsafe_background
         )
 
 pico_add_extra_outputs(energy_monitoring)
 
-# Print memory usage after build
-target_link_options(energy_monitoring PRIVATE
-        -Wl,--print-memory-usage
-)
