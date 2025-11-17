@@ -41,6 +41,7 @@ add_executable(energy_monitoring
         energy_monitoring.c
         lib/wifi_manager/wifi_manager.c
         lib/mqtt_manager/mqtt_manager.c
+        lib/pzem004t/pzem004t.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -63,6 +64,7 @@ target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/lib
         ${CMAKE_CURRENT_LIST_DIR}/lib/wifi_manager
         ${CMAKE_CURRENT_LIST_DIR}/lib/mqtt_manager
+        ${CMAKE_CURRENT_LIST_DIR}/lib/pzem004t
 )
 
 # Add any user requested libraries

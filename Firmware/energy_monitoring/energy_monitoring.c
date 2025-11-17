@@ -5,9 +5,11 @@
 #include "task.h"
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
+#include "pzem004t.h"
 
 // Protótipo da task
 void vTaskSimulatedTemp(void *pvParameters);
+void vTaskPZEMReader(void *pvParameters);
 
 int main() {
     stdio_init_all();
@@ -21,9 +23,13 @@ int main() {
 
     wifi_init_manager();
     mqtt_start();
+    pzem_init();
 
     // Criar a task de temperatura simulada
     xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
+
+    // Criar a task de leitura do PZEM
+    xTaskCreate(vTaskPZEMReader, "PZEMReader", 4096, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
@@ -55,3 +61,44 @@ void vTaskSimulatedTemp(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(5000)); // A cada 5 segundos
     }
 }
+
+void vTaskPZEMReader(void *pvParameters)
+{
+    pzem_data_t data;
+
+    while (1)
+    {
+        if (pzem_read(&data))
+        {
+            char json[256];
+
+            snprintf(json, sizeof(json),
+                "{"
+                "\"voltage\": %.1f,"
+                "\"current\": %.3f,"
+                "\"power\": %.1f,"
+                "\"energy\": %.3f,"
+                "\"frequency\": %.1f,"
+                "\"pf\": %.2f"
+                "}",
+                data.voltage,
+                data.current,
+                data.power,
+                data.energy,
+                data.frequency,
+                data.pf
+            );
+
+            mqtt_publish_async("pico/energy/data", json);
+
+            printf("[PZEM] %s\n", json);
+        }
+        else
+        {
+            printf("[PZEM] Falha leitura\n");
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
