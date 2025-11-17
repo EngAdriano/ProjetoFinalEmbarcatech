@@ -39,7 +39,8 @@ pico_sdk_init()
 
 add_executable(energy_monitoring 
         energy_monitoring.c
-        lib/wifi_manager/wifi_manager.c 
+        lib/wifi_manager/wifi_manager.c
+        lib/mqtt_manager/mqtt_manager.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -61,11 +62,13 @@ target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/lib
         ${CMAKE_CURRENT_LIST_DIR}/lib/wifi_manager
+        ${CMAKE_CURRENT_LIST_DIR}/lib/mqtt_manager
 )
 
 # Add any user requested libraries
 target_link_libraries(energy_monitoring 
         pico_cyw43_arch_lwip_threadsafe_background
+        pico_lwip_mqtt
         )
 
 pico_add_extra_outputs(energy_monitoring)

@@ -4,6 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "wifi_manager.h"
+#include "mqtt_manager.h"
 
 int main() {
     stdio_init_all();
@@ -16,6 +17,7 @@ int main() {
     cyw43_arch_enable_sta_mode();
 
     wifi_init_manager();
+    mqtt_start();
 
     vTaskStartScheduler();
 
