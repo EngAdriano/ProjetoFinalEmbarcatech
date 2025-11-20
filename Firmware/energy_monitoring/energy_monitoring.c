@@ -7,10 +7,11 @@
 #include "mqtt_manager.h"
 #include "pzem004t.h"
 
-// Protótipo da task
+// Protótipo das task's
 void vTaskSimulatedTemp(void *pvParameters);
 void vTaskPZEMReader(void *pvParameters);
 
+// Função principal
 int main() {
     stdio_init_all();
 
@@ -19,17 +20,19 @@ int main() {
         return -1;
     }
 
+    // Iniciar WiFi e MQTT
     cyw43_arch_enable_sta_mode();
-
     wifi_init_manager();
     mqtt_start();
-    pzem_init();
 
-    // Criar a task de temperatura simulada
-    xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
+    // Iniciar PZEM
+    //pzem_init();
+
+   // Criar a task de temperatura simulada
+   //xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
 
     // Criar a task de leitura do PZEM
-    xTaskCreate(vTaskPZEMReader, "PZEMReader", 4096, NULL, 1, NULL);
+    //xTaskCreate(vTaskPZEMReader, "PZEMReader", 4096, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
