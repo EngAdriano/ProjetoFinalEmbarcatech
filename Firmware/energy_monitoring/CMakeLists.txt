@@ -43,6 +43,7 @@ add_executable(energy_monitoring
         lib/mqtt_manager/mqtt_manager.c
         lib/pzem004t/pzem004t.c
         lib/rtc_ds3231/rtc_ds3231.c
+        lib/eeprom_at24c32/eeprom_at24c32.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -67,6 +68,7 @@ target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/lib/mqtt_manager
         ${CMAKE_CURRENT_LIST_DIR}/lib/pzem004t
         ${CMAKE_CURRENT_LIST_DIR}/lib/rtc_ds3231
+        ${CMAKE_CURRENT_LIST_DIR}/lib/eeprom_at24c32
 )
 
 # Add any user requested libraries

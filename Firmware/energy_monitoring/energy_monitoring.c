@@ -3,15 +3,18 @@
 #include "pico/cyw43_arch.h"
 #include "FreeRTOS.h"
 #include "task.h"
+
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
 #include "pzem004t.h"
+#include "rtc_ds3231.h"
+#include "eeprom_at24c32.h"
 
-// Protótipo das task's
 void vTaskSimulatedTemp(void *pvParameters);
 void vTaskPZEMReader(void *pvParameters);
+void vTaskRTCReader(void *pvParameters);
+void vTaskEEPROMTest(void *pvParameters);
 
-// Função principal
 int main() {
     stdio_init_all();
 
@@ -20,23 +23,119 @@ int main() {
         return -1;
     }
 
-    // Iniciar WiFi e MQTT
     cyw43_arch_enable_sta_mode();
+
     wifi_init_manager();
+    //pzem_init();
+    ds3231_init();
+
+    // ========================================
+    //   DEFINA AQUI A DATA/HORA MANUALMENTE
+    // ========================================
+    ds3231_time_t init_time = {
+        .seconds = 0,
+        .minutes = 15,
+        .hours   = 10,
+        .day     = 20,
+        .month   = 11,
+        .year    = 2025,
+        .day_of_week = 4
+    };
+
+    printf("[RTC] Gravando data/hora manual...\n");
+    if (ds3231_set_time(&init_time)) {
+        printf("[RTC] Data/hora configurada com sucesso!\n");
+    } else {
+        printf("[RTC] ERRO ao configurar data/hora!\n");
+    }
+
+    // Iniciar MQTT
     mqtt_start();
 
-    // Iniciar PZEM
-    //pzem_init();
+    // Criar tasks
+    xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
+    //xTaskCreate(vTaskPZEMReader,   "PZEMReader",   4096, NULL, 1, NULL);
+    xTaskCreate(vTaskRTCReader,  "RTCReader",    2048, NULL, 1, NULL);
+    //xTaskCreate(vTaskEEPROMTest, "EEPROMTest", 2048, NULL, 1, NULL);
 
-   // Criar a task de temperatura simulada
-   //xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
-
-    // Criar a task de leitura do PZEM
-    //xTaskCreate(vTaskPZEMReader, "PZEMReader", 4096, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
     while (1) {}
+}
+
+// Exemplo de uso da eeprom_at24c32
+/*
+#include "eeprom_at24c32.h"
+
+void test_eeprom()
+{
+    at24c32_init();
+
+    // Grava "OLA" na EEPROM
+    uint8_t msg[] = "OLA";
+    at24c32_write_block(0, msg, 3);
+
+    sleep_ms(10);
+
+    // Lê de volta
+    uint8_t buffer[4];
+    at24c32_read_block(0, buffer, 3);
+    buffer[3] = '\0';
+
+    printf("EEPROM: %s\n", buffer);
+}*/
+
+// Task de teste da EEPROM AT24C32
+void vTaskEEPROMTest(void *pvParameters)
+{
+    // Inicializar EEPROM
+    at24c32_init();
+    printf("[EEPROM] Inicializada\n");
+
+    uint16_t addr = 0; // endereço inicial
+    uint8_t buffer[64];
+
+    while (1)
+    {
+        // Texto para teste
+        const char *msg = "Teste EEPROM OK";
+        uint16_t len = strlen(msg);
+
+        // Gravar na EEPROM
+        if (at24c32_write_block(addr, (uint8_t*)msg, len))
+        {
+            printf("[EEPROM] Gravado: %s\n", msg);
+        }
+        else
+        {
+            printf("[EEPROM] ERRO ao gravar!\n");
+        }
+
+        // Pequena pausa
+        vTaskDelay(pdMS_TO_TICKS(20));
+
+        // Ler de volta
+        memset(buffer, 0, sizeof(buffer));
+        if (at24c32_read_block(addr, buffer, len))
+        {
+            printf("[EEPROM] Lido: %s\n", buffer);
+
+            // Enviar via MQTT
+            char json[128];
+            snprintf(json, sizeof(json),
+                "{\"eeprom_test\": \"%s\"}", buffer);
+
+            mqtt_publish_async("pico/eeprom/test", json);
+        }
+        else
+        {
+            printf("[EEPROM] ERRO ao ler!\n");
+        }
+
+        // Aguarda 5 segundos
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
 }
 
 
@@ -105,3 +204,41 @@ void vTaskPZEMReader(void *pvParameters)
     }
 }
 
+
+void vTaskRTCReader(void *pvParameters)
+{
+    ds3231_time_t now;
+
+    while (1)
+    {
+        if (ds3231_get_time(&now))
+        {
+            float temp = ds3231_get_temperature();
+
+            char json[256];
+            snprintf(json, sizeof(json),
+                "{"
+                "\"date\": \"%02d/%02d/%04d\","
+                "\"time\": \"%02d:%02d:%02d\","
+                "\"temperature\": %.2f"
+                "}",
+                now.day,
+                now.month,
+                now.year,
+                now.hours,
+                now.minutes,
+                now.seconds,
+                temp
+            );
+
+            mqtt_publish_async("pico/system/rtc", json);
+            printf("[RTC] %s\n", json);
+        }
+        else
+        {
+            printf("[RTC] Falha ao ler RTC.\n");
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(3000));
+    }
+}
