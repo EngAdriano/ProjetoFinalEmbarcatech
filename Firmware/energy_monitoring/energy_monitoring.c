@@ -26,15 +26,15 @@ int main() {
     cyw43_arch_enable_sta_mode();
 
     wifi_init_manager();
-    //pzem_init();
-    ds3231_init();
-
+    pzem_init();
+    //ds3231_init();
+    /*
     // ========================================
     //   DEFINA AQUI A DATA/HORA MANUALMENTE
     // ========================================
     ds3231_time_t init_time = {
         .seconds = 0,
-        .minutes = 15,
+        .minutes = 20,
         .hours   = 10,
         .day     = 20,
         .month   = 11,
@@ -47,17 +47,16 @@ int main() {
         printf("[RTC] Data/hora configurada com sucesso!\n");
     } else {
         printf("[RTC] ERRO ao configurar data/hora!\n");
-    }
+    }*/
 
     // Iniciar MQTT
-    mqtt_start();
+    //mqtt_start();
 
     // Criar tasks
-    xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
-    //xTaskCreate(vTaskPZEMReader,   "PZEMReader",   4096, NULL, 1, NULL);
-    xTaskCreate(vTaskRTCReader,  "RTCReader",    2048, NULL, 1, NULL);
+    //xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
+    xTaskCreate(vTaskPZEMReader,   "PZEMReader",   4096, NULL, 1, NULL);
+    //xTaskCreate(vTaskRTCReader,  "RTCReader",    2048, NULL, 1, NULL);
     //xTaskCreate(vTaskEEPROMTest, "EEPROMTest", 2048, NULL, 1, NULL);
-
 
     vTaskStartScheduler();
 
@@ -166,41 +165,17 @@ void vTaskSimulatedTemp(void *pvParameters)
 
 void vTaskPZEMReader(void *pvParameters)
 {
-    pzem_data_t data;
+   pzem_data_t data;
 
-    while (1)
-    {
-        if (pzem_read(&data))
-        {
-            char json[256];
-
-            snprintf(json, sizeof(json),
-                "{"
-                "\"voltage\": %.1f,"
-                "\"current\": %.3f,"
-                "\"power\": %.1f,"
-                "\"energy\": %.3f,"
-                "\"frequency\": %.1f,"
-                "\"pf\": %.2f"
-                "}",
-                data.voltage,
-                data.current,
-                data.power,
-                data.energy,
-                data.frequency,
-                data.pf
-            );
-
-            mqtt_publish_async("pico/energy/data", json);
-
-            printf("[PZEM] %s\n", json);
-        }
-        else
-        {
-            printf("[PZEM] Falha leitura\n");
+    while (1) {
+        if (pzem_read(&data)) {
+            printf("V=%.1fV  I=%.3fA  P=%.1fW  E=%.3fkWh  F=%.1fHz  PF=%.2f\n",
+                data.voltage, data.current, data.power, data.energy, data.frequency, data.pf);
+        } else {
+            printf("Falha leitura\n");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        sleep_ms(2000);
     }
 }
 
