@@ -28,7 +28,7 @@ int main() {
     wifi_init_manager();
     pzem_init();
     //ds3231_init();
-    /*
+    
     // ========================================
     //   DEFINA AQUI A DATA/HORA MANUALMENTE
     // ========================================
@@ -47,16 +47,16 @@ int main() {
         printf("[RTC] Data/hora configurada com sucesso!\n");
     } else {
         printf("[RTC] ERRO ao configurar data/hora!\n");
-    }*/
+    }
 
     // Iniciar MQTT
-    //mqtt_start();
+    mqtt_start();
 
     // Criar tasks
-    //xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
+    xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
     xTaskCreate(vTaskPZEMReader,   "PZEMReader",   4096, NULL, 1, NULL);
-    //xTaskCreate(vTaskRTCReader,  "RTCReader",    2048, NULL, 1, NULL);
-    //xTaskCreate(vTaskEEPROMTest, "EEPROMTest", 2048, NULL, 1, NULL);
+    xTaskCreate(vTaskRTCReader,  "RTCReader",    2048, NULL, 1, NULL);
+    xTaskCreate(vTaskEEPROMTest, "EEPROMTest", 2048, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
@@ -64,7 +64,7 @@ int main() {
 }
 
 // Exemplo de uso da eeprom_at24c32
-/*
+
 #include "eeprom_at24c32.h"
 
 void test_eeprom()
@@ -83,7 +83,7 @@ void test_eeprom()
     buffer[3] = '\0';
 
     printf("EEPROM: %s\n", buffer);
-}*/
+}
 
 // Task de teste da EEPROM AT24C32
 void vTaskEEPROMTest(void *pvParameters)
