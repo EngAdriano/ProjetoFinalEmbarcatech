@@ -17,11 +17,15 @@
 #include "fonts.h"
 #include "testimg.h"
 
+/* ===============================
+   Queue global
+   =============================== */
+QueueHandle_t xQueuePZEM;
 
-void vTaskSimulatedTemp(void *pvParameters);
-void vTaskPZEMReader(void *pvParameters);
-void vTaskRTCReader(void *pvParameters);
-void vTaskEEPROMTest(void *pvParameters);
+static void ui_draw_frame_landscape(void);
+static void ui_update_pzem_landscape(const pzem_data_t *d);
+void vTaskPZEMReader(void *pv);
+void vTaskDisplay(void *pv);
 
 int main() {
     stdio_init_all();
@@ -53,192 +57,113 @@ int main() {
     wifi_init_manager();
     pzem_init();
     //ds3231_init();
-    
-    // ========================================
-    //   DEFINA AQUI A DATA/HORA MANUALMENTE
-    // ========================================
-    ds3231_time_t init_time = {
-        .seconds = 0,
-        .minutes = 20,
-        .hours   = 10,
-        .day     = 20,
-        .month   = 11,
-        .year    = 2025,
-        .day_of_week = 4
-    };
-
-    printf("[RTC] Gravando data/hora manual...\n");
-    if (ds3231_set_time(&init_time)) {
-        printf("[RTC] Data/hora configurada com sucesso!\n");
-    } else {
-        printf("[RTC] ERRO ao configurar data/hora!\n");
-    }
-
+    xQueuePZEM = xQueueCreate(5, sizeof(pzem_data_t));
+\
     // Iniciar MQTT
     mqtt_start();
 
     // Criar tasks
-    xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
-    xTaskCreate(vTaskPZEMReader,   "PZEMReader",   4096, NULL, 1, NULL);
-    xTaskCreate(vTaskRTCReader,  "RTCReader",    2048, NULL, 1, NULL);
-    //xTaskCreate(vTaskEEPROMTest, "EEPROMTest", 2048, NULL, 1, NULL);
+    xTaskCreate(vTaskPZEMReader, "PZEM Reader", 2048, NULL, 2, NULL);
+    xTaskCreate(vTaskDisplay, "Display", 4096, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
     while (1) {}
 }
 
-// Exemplo de uso da eeprom_at24c32
-
-#include "eeprom_at24c32.h"
-
-void test_eeprom()
+/* ===============================
+   Funções de UI
+   =============================== */
+static void ui_draw_frame_landscape(void)
 {
-    at24c32_init();
+    ST7735_FillScreen(ST7735_BLACK);
 
-    // Grava "OLA" na EEPROM
-    uint8_t msg[] = "OLA";
-    at24c32_write_block(0, msg, 3);
+    ST7735_DrawRect(2, 2, 156, 124, ST7735_WHITE);
 
-    sleep_ms(10);
+    ST7735_DrawString(40, 6, "ENERGY MONITOR",
+                      Font_7x10, ST7735_CYAN, ST7735_BLACK);
 
-    // Lê de volta
-    uint8_t buffer[4];
-    at24c32_read_block(0, buffer, 3);
-    buffer[3] = '\0';
+    ST7735_DrawLine(2, 20, 158, 20, ST7735_WHITE);
 
-    printf("EEPROM: %s\n", buffer);
+    // Labels compactos
+    ST7735_DrawString(6, 35,  "V:",  Font_7x10, ST7735_WHITE, ST7735_BLACK);
+    ST7735_DrawString(6, 55,  "P:",  Font_7x10, ST7735_WHITE, ST7735_BLACK);
+    ST7735_DrawString(6, 75,  "F:",  Font_7x10, ST7735_WHITE, ST7735_BLACK);
+
+    ST7735_DrawString(80, 35, "I:",  Font_7x10, ST7735_WHITE, ST7735_BLACK);
+    ST7735_DrawString(80, 55, "E:",  Font_7x10, ST7735_WHITE, ST7735_BLACK);
+    ST7735_DrawString(80, 75, "PF:", Font_7x10, ST7735_WHITE, ST7735_BLACK);
+
+    ST7735_DrawLine(2, 95, 158, 95, ST7735_WHITE);
+    ST7735_DrawString(6, 105, "STATUS:", Font_7x10,
+                      ST7735_WHITE, ST7735_BLACK);
 }
 
-// Task de teste da EEPROM AT24C32
-void vTaskEEPROMTest(void *pvParameters)
+static void ui_update_pzem_landscape(const pzem_data_t *d)
 {
-    // Inicializar EEPROM
-    at24c32_init();
-    printf("[EEPROM] Inicializada\n");
+    char buf[20];
 
-    uint16_t addr = 0; // endereço inicial
-    uint8_t buffer[64];
+    sprintf(buf, "%4.1fV", d->voltage);
+    ST7735_DrawString(22, 35, buf, Font_7x10, ST7735_GREEN, ST7735_BLACK);
+
+    sprintf(buf, "%4.3fA", d->current);
+    ST7735_DrawString(96, 35, buf, Font_7x10, ST7735_GREEN, ST7735_BLACK);
+
+    sprintf(buf, "%5.1fW", d->power);
+    ST7735_DrawString(22, 55, buf, Font_7x10, ST7735_GREEN, ST7735_BLACK);
+
+    sprintf(buf, "%5.3fk", d->energy);   // kWh abreviado
+    ST7735_DrawString(96, 55, buf, Font_7x10, ST7735_GREEN, ST7735_BLACK);
+
+    sprintf(buf, "%4.1fHz", d->frequency);
+    ST7735_DrawString(22, 75, buf, Font_7x10, ST7735_GREEN, ST7735_BLACK);
+
+    sprintf(buf, "%3.2f", d->pf);
+    ST7735_DrawString(104, 75, buf, Font_7x10, ST7735_GREEN, ST7735_BLACK);
+
+    ST7735_DrawString(70, 105, "ACTIVE",
+                      Font_7x10, ST7735_GREEN, ST7735_BLACK);
+}
+
+
+/* ===============================
+   Task de leitura do PZEM
+   =============================== */
+void vTaskPZEMReader(void *pv)
+{
+    pzem_data_t data;
+
+    pzem_init();
 
     while (1)
     {
-        // Texto para teste
-        const char *msg = "Teste EEPROM OK";
-        uint16_t len = strlen(msg);
-
-        // Gravar na EEPROM
-        if (at24c32_write_block(addr, (uint8_t*)msg, len))
+        if (pzem_read(&data))
         {
-            printf("[EEPROM] Gravado: %s\n", msg);
-        }
-        else
-        {
-            printf("[EEPROM] ERRO ao gravar!\n");
+            xQueueOverwrite(xQueuePZEM, &data);
         }
 
-        // Pequena pausa
-        vTaskDelay(pdMS_TO_TICKS(20));
-
-        // Ler de volta
-        memset(buffer, 0, sizeof(buffer));
-        if (at24c32_read_block(addr, buffer, len))
-        {
-            printf("[EEPROM] Lido: %s\n", buffer);
-
-            // Enviar via MQTT
-            char json[128];
-            snprintf(json, sizeof(json),
-                "{\"eeprom_test\": \"%s\"}", buffer);
-
-            mqtt_publish_async("pico/eeprom/test", json);
-        }
-        else
-        {
-            printf("[EEPROM] ERRO ao ler!\n");
-        }
-
-        // Aguarda 5 segundos
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
-
-void vTaskSimulatedTemp(void *pvParameters)
+/* ===============================
+   Task de Display
+   =============================== */
+void vTaskDisplay(void *pv)
 {
-    float temp = 25.0f;   // temperatura inicial
-    float step = 0.3f;    // variação por ciclo
+    pzem_data_t data;
+
+    ST7735_Init();
+    ST7735_SetRotation(1);   // paisagem
+    ui_draw_frame_landscape();
 
     while (1)
     {
-        // Gera oscilação da temperatura
-        temp += step;
-        if (temp > 30.0f || temp < 20.0f)
-            step = -step;
-
-        // Criar JSON
-        char json[128];
-        snprintf(json, sizeof(json), "{\"temperature\": %.2f}", temp);
-
-        // Enviar via MQTT
-        mqtt_publish_async("pico/sensor/temperature", json);
-
-        printf("[TEMP] Enviado: %s\n", json);
-
-        vTaskDelay(pdMS_TO_TICKS(5000)); // A cada 5 segundos
-    }
-}
-
-void vTaskPZEMReader(void *pvParameters)
-{
-   pzem_data_t data;
-
-    while (1) {
-        if (pzem_read(&data)) {
-            printf("V=%.1fV  I=%.3fA  P=%.1fW  E=%.3fkWh  F=%.1fHz  PF=%.2f\n",
-                data.voltage, data.current, data.power, data.energy, data.frequency, data.pf);
-        } else {
-            printf("Falha leitura\n");
-        }
-
-        sleep_ms(2000);
-    }
-}
-
-
-void vTaskRTCReader(void *pvParameters)
-{
-    ds3231_time_t now;
-
-    while (1)
-    {
-        if (ds3231_get_time(&now))
+        if (xQueueReceive(xQueuePZEM, &data, pdMS_TO_TICKS(200)))
         {
-            float temp = ds3231_get_temperature();
-
-            char json[256];
-            snprintf(json, sizeof(json),
-                "{"
-                "\"date\": \"%02d/%02d/%04d\","
-                "\"time\": \"%02d:%02d:%02d\","
-                "\"temperature\": %.2f"
-                "}",
-                now.day,
-                now.month,
-                now.year,
-                now.hours,
-                now.minutes,
-                now.seconds,
-                temp
-            );
-
-            mqtt_publish_async("pico/system/rtc", json);
-            printf("[RTC] %s\n", json);
-        }
-        else
-        {
-            printf("[RTC] Falha ao ler RTC.\n");
+            ui_update_pzem_landscape(&data);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
 }
