@@ -10,6 +10,14 @@
 #include "rtc_ds3231.h"
 #include "eeprom_at24c32.h"
 
+#include "hardware/gpio.h"
+#include "hardware/spi.h"
+#include "main.h"
+#include "st7735.h"
+#include "fonts.h"
+#include "testimg.h"
+
+
 void vTaskSimulatedTemp(void *pvParameters);
 void vTaskPZEMReader(void *pvParameters);
 void vTaskRTCReader(void *pvParameters);
@@ -17,6 +25,23 @@ void vTaskEEPROMTest(void *pvParameters);
 
 int main() {
     stdio_init_all();
+
+    // intialize the SPI0 of Raspberry Pi
+    spi_init(SPI_PORT, 4000 * 1000);
+    //gpio_set_function(LCD_MISO, GPIO_FUNC_SPI);
+    gpio_set_function(LCD_SCK, GPIO_FUNC_SPI);
+    gpio_set_function(LCD_MOSI, GPIO_FUNC_SPI);
+
+    // Chip select is active-low, so we'll initialise it to a driven-high state
+    gpio_init(LCD_RST);
+    gpio_set_dir(LCD_RST, GPIO_OUT);
+    gpio_init(LCD_CS);
+    gpio_set_dir(LCD_CS, GPIO_OUT);
+    gpio_init(LCD_DC); //RS PIn
+    gpio_set_dir(LCD_DC, GPIO_OUT);
+
+    // call the LCD initialization
+    ST7735_Init();
 
     if (cyw43_arch_init()) {
         printf("Erro ao iniciar CYW43\n");
@@ -56,7 +81,7 @@ int main() {
     xTaskCreate(vTaskSimulatedTemp, "TempSimTask", 2048, NULL, 1, NULL);
     xTaskCreate(vTaskPZEMReader,   "PZEMReader",   4096, NULL, 1, NULL);
     xTaskCreate(vTaskRTCReader,  "RTCReader",    2048, NULL, 1, NULL);
-    xTaskCreate(vTaskEEPROMTest, "EEPROMTest", 2048, NULL, 1, NULL);
+    //xTaskCreate(vTaskEEPROMTest, "EEPROMTest", 2048, NULL, 1, NULL);
 
     vTaskStartScheduler();
 

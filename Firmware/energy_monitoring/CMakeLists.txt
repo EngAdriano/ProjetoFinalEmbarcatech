@@ -44,6 +44,10 @@ add_executable(energy_monitoring
         lib/pzem004t/pzem004t.c
         lib/rtc_ds3231/rtc_ds3231.c
         lib/eeprom_at24c32/eeprom_at24c32.c
+        lib/st7735/st7735.c
+        lib/st7735/fonts.c
+        lib/aht10/aht10.c
+        lib/bh1750/bh1750.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -69,6 +73,9 @@ target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/lib/pzem004t
         ${CMAKE_CURRENT_LIST_DIR}/lib/rtc_ds3231
         ${CMAKE_CURRENT_LIST_DIR}/lib/eeprom_at24c32
+        ${CMAKE_CURRENT_LIST_DIR}/lib/st7735
+        ${CMAKE_CURRENT_LIST_DIR}/lib/aht10
+         ${CMAKE_CURRENT_LIST_DIR}/lib/bh1750
 )
 
 # Add any user requested libraries
@@ -76,6 +83,7 @@ target_link_libraries(energy_monitoring
         pico_cyw43_arch_lwip_threadsafe_background
         pico_lwip_mqtt
         hardware_i2c
+        hardware_spi
         )
 
 pico_add_extra_outputs(energy_monitoring)
