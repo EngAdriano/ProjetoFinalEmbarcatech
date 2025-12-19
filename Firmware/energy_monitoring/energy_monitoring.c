@@ -5,6 +5,7 @@
 // FreeRTOS includes
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 
 // Drivers e libs do projeto
 #include "wifi_manager.h"
@@ -22,10 +23,12 @@
    =============================== */
 QueueHandle_t xQueuePZEM;
 
-static void ui_draw_frame_landscape(void);
-static void ui_update_pzem_landscape(const pzem_data_t *d);
+/* ===============================
+   Protótipos da funções
+   =============================== */
 void vTaskPZEMReader(void *pv);
 void vTaskDisplay(void *pv);
+void vTaskWiFi(void *pv);
 
 int main() {
     stdio_init_all();
@@ -51,9 +54,9 @@ int main() {
 
     cyw43_arch_enable_sta_mode();
 
-    wifi_init_manager();
-    pzem_init();
-    //ds3231_init();
+    wifi_manager_init();
+    mqtt_manager_init();
+
     xQueuePZEM = xQueueCreate(5, sizeof(pzem_data_t));
 
     if (xQueuePZEM == NULL)
@@ -61,11 +64,11 @@ int main() {
         /* Falha crítica */
         while (1) { }
     }
-\
-    // Iniciar MQTT
-    mqtt_start();
 
     // Criar tasks
+    xTaskCreate(vTaskWiFiManager, "WIFI", 2048, NULL, 3, NULL);
+    xTaskCreate(vTaskMQTT, "MQTT", 4096, NULL, 2, NULL);
+
     xTaskCreate(vTaskPZEMReader, "PZEM", 2048, NULL, 2, NULL);
     xTaskCreate(vTaskDisplay, "DISPLAY", 4096, NULL, 1, NULL);
 
@@ -73,7 +76,6 @@ int main() {
 
     while (1) {}
 }
-
 
 /* ===============================
    Task de leitura do PZEM

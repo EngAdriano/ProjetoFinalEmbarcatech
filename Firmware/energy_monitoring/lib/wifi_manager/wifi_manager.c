@@ -1,23 +1,58 @@
 #include <stdio.h>
+
 #include "pico/cyw43_arch.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "semphr.h"
+
+#include "lwip/netif.h"
+#include "lwip/ip4_addr.h"
+
 #include "wifi_manager.h"
 
+/* ===============================
+   Configurações Wi-Fi
+   =============================== */
 #define WIFI_SSID      "Lu e Deza"
 #define WIFI_PASSWORD  "liukin1208"
 
-static SemaphoreHandle_t xWiFiMutex;
-static bool wifi_connected = false;
+/* ===============================
+   Estado global
+   =============================== */
+volatile bool g_wifi_connected = false;
 
-static void vTaskWiFiManager(void *pv) {
+/* ===============================
+   Recursos internos
+   =============================== */
+static SemaphoreHandle_t xWiFiMutex;
+
+/* ===============================
+   Inicialização do Wi-Fi Manager
+   =============================== */
+void wifi_manager_init(void)
+{
+    xWiFiMutex = xSemaphoreCreateMutex();
+
+    if (xWiFiMutex == NULL)
+    {
+        printf("[WiFi] Erro ao criar mutex\n");
+    }
+}
+
+/* ===============================
+   Task de gerenciamento Wi-Fi
+   =============================== */
+void vTaskWiFiManager(void *pv)
+{
     struct netif *netif = &cyw43_state.netif[0];
 
-    while (1) {
-        if (xSemaphoreTake(xWiFiMutex, portMAX_DELAY)) {
-            if (!wifi_connected || netif->ip_addr.addr == 0) {
-                printf("Tentando conectar em '%s'...\n", WIFI_SSID);
+    while (1)
+    {
+        if (xSemaphoreTake(xWiFiMutex, portMAX_DELAY))
+        {
+            if (!g_wifi_connected || netif->ip_addr.addr == 0)
+            {
+                printf("[WiFi] Conectando em '%s'...\n", WIFI_SSID);
 
                 int r = cyw43_arch_wifi_connect_timeout_ms(
                     WIFI_SSID,
@@ -26,12 +61,16 @@ static void vTaskWiFiManager(void *pv) {
                     15000
                 );
 
-                if (r == 0) {
-                    wifi_connected = true;
-                    printf("Conectado! IP: %s\n", ip4addr_ntoa(&netif->ip_addr));
-                } else {
-                    wifi_connected = false;
-                    printf("Falha ao conectar.\n");
+                if (r == 0)
+                {
+                    g_wifi_connected = true;
+                    printf("[WiFi] Conectado! IP: %s\n",
+                           ip4addr_ntoa(&netif->ip_addr));
+                }
+                else
+                {
+                    g_wifi_connected = false;
+                    printf("[WiFi] Falha ao conectar.\n");
                 }
             }
 
@@ -40,9 +79,4 @@ static void vTaskWiFiManager(void *pv) {
 
         vTaskDelay(pdMS_TO_TICKS(10000));
     }
-}
-
-void wifi_init_manager(void) {
-    xWiFiMutex = xSemaphoreCreateMutex();
-    xTaskCreate(vTaskWiFiManager, "WiFiManager", 2048, NULL, 1, NULL);
 }
