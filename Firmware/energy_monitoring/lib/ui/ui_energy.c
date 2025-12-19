@@ -135,7 +135,7 @@ void UI_Energy_ShowSplash(void)
                       Font_7x10, ST7735_CYAN, ST7735_BLACK);
 
     ST7735_DrawString(20, 110,
-                      "Autor: Eng. Jose Adriano",
+                      "Eng. Jose Adriano",
                       Font_7x10, ST7735_YELLOW, ST7735_BLACK);
 
     /* Tempo da splash screen */
