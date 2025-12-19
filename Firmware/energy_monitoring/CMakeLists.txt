@@ -48,6 +48,7 @@ add_executable(energy_monitoring
         lib/st7735/fonts.c
         lib/aht10/aht10.c
         lib/bh1750/bh1750.c
+        lib/ui/ui_energy.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -75,7 +76,8 @@ target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/lib/eeprom_at24c32
         ${CMAKE_CURRENT_LIST_DIR}/lib/st7735
         ${CMAKE_CURRENT_LIST_DIR}/lib/aht10
-         ${CMAKE_CURRENT_LIST_DIR}/lib/bh1750
+        ${CMAKE_CURRENT_LIST_DIR}/lib/bh1750
+        ${CMAKE_CURRENT_LIST_DIR}/lib/ui
 )
 
 # Add any user requested libraries
