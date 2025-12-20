@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
+#include "hardware/i2c.h"
+#include "hardware/gpio.h"
+#include "hardware/spi.h"
 
 // FreeRTOS includes
 #include "FreeRTOS.h"
@@ -13,10 +16,10 @@
 #include "pzem004t.h"
 #include "rtc_ds3231.h"
 #include "eeprom_at24c32.h"
-#include "hardware/gpio.h"
-#include "hardware/spi.h"
 #include "main.h"
 #include "ui_energy.h"
+#include "env_sensors.h"
+
 
 #define MQTT_TOPIC_PZEM "embarcartech/energy/pzem"
 
@@ -25,7 +28,7 @@
    =============================== */
 QueueHandle_t xQueuePZEM_Display;
 QueueHandle_t xQueuePZEM_MQTT;
-
+QueueHandle_t xEnvSensorQueue;
 
 /* ===============================
    Protótipos da funções
@@ -33,6 +36,7 @@ QueueHandle_t xQueuePZEM_MQTT;
 void vTaskPZEMReader(void *pv);
 void vTaskDisplay(void *pv);
 void vTaskMQTTPublisher(void *pv);
+
 
 int main() {
     stdio_init_all();
@@ -63,12 +67,17 @@ int main() {
 
     xQueuePZEM_Display = xQueueCreate(1, sizeof(pzem_data_t));
     xQueuePZEM_MQTT    = xQueueCreate(1, sizeof(pzem_data_t));
+    xEnvSensorQueue = xQueueCreate(1, sizeof(env_sensor_data_t));
 
     if (xQueuePZEM_Display == NULL || xQueuePZEM_MQTT == NULL)
     {
         /* Falha crítica */
         while (1) {}
     }
+
+    env_sensors_set_queue(xEnvSensorQueue);
+    env_sensors_init();
+
 
 
     // Criar tasks
@@ -77,6 +86,7 @@ int main() {
     xTaskCreate(vTaskPZEMReader, "PZEM", 2048, NULL, 2, NULL);
     xTaskCreate(vTaskDisplay, "DISPLAY", 4096, NULL, 1, NULL);
     xTaskCreate(vTaskMQTTPublisher, "MQTT_PUB", 2048, NULL, 2, NULL);
+    xTaskCreate(env_sensors_task, "ENV_SENS", 2048, NULL, 3, NULL);
     
     vTaskStartScheduler();
 
@@ -127,35 +137,54 @@ void vTaskDisplay(void *pv)
 
 void vTaskMQTTPublisher(void *pv)
 {
-    pzem_data_t data;
-    char payload[256];
+    pzem_data_t energy;
+    env_sensor_data_t env;
+    char payload[512];
+
+    /* Inicializa env com zeros para o primeiro publish */
+    memset(&env, 0, sizeof(env));
 
     while (1)
     {
-        /* Aguarda novos dados do PZEM */
-        if (xQueueReceive(xQueuePZEM_MQTT, &data, pdMS_TO_TICKS(2000)))
+        /* Gatilho da publicação: novos dados do PZEM */
+        if (xQueueReceive(xQueuePZEM_MQTT, &energy, pdMS_TO_TICKS(2000)))
         {
-            /* Só publica se MQTT estiver conectado */
-            if (g_mqtt_connected)
-            {
-                snprintf(payload, sizeof(payload),
-                         "{"
-                         "\"voltage\":%.2f,"
-                         "\"current\":%.3f,"
-                         "\"power\":%.2f,"
-                         "\"energy\":%.3f,"
-                         "\"frequency\":%.1f,"
-                         "\"pf\":%.2f"
-                         "}",
-                         data.voltage,
-                         data.current,
-                         data.power,
-                         data.energy,
-                         data.frequency,
-                         data.pf);
+            if (!g_mqtt_connected)
+                continue;
 
-                mqtt_publish_async(MQTT_TOPIC_PZEM, payload);
-            }
+            /* Últimos dados ambientais (não bloqueante) */
+            xQueuePeek(xEnvSensorQueue, &env, 0);
+
+            /* Monta JSON único */
+            snprintf(payload, sizeof(payload),
+                     "{"
+                     "\"energy\":{"
+                     "\"voltage\":%.2f,"
+                     "\"current\":%.3f,"
+                     "\"power\":%.2f,"
+                     "\"energy\":%.3f,"
+                     "\"frequency\":%.1f,"
+                     "\"pf\":%.2f"
+                     "},"
+                     "\"environment\":{"
+                     "\"temperature\":%.2f,"
+                     "\"humidity\":%.2f,"
+                     "\"lux\":%.2f"
+                     "}"
+                     "}",
+                     energy.voltage,
+                     energy.current,
+                     energy.power,
+                     energy.energy,
+                     energy.frequency,
+                     energy.pf,
+                     env.temperature,
+                     env.humidity,
+                     env.lux);
+
+            mqtt_publish_async(MQTT_TOPIC_PZEM, payload);
+
+            printf("[MQTT] %s\n", payload);
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000));
