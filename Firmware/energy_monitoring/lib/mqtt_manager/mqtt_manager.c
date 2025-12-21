@@ -177,58 +177,6 @@ void vTaskMQTTConnection(void *pv)
 }
 
 /* ===============================
-   Task: Agregador de dados MQTT
-   =============================== */
-void vTaskMQTTAggregator(void *pv)
-{
-    pzem_data_t pzem;
-    env_sensor_data_t env_raw;
-
-    payload_energy_t energy;
-    payload_environment_t env;
-
-    char payload[512];
-
-    for (;;)
-    {
-        if (xQueueReceive(xQueuePZEM_MQTT, &pzem, portMAX_DELAY))
-        {
-            /* Converte PZEM -> payload */
-            energy.voltage   = pzem.voltage;
-            energy.current   = pzem.current;
-            energy.power     = pzem.power;
-            energy.energy    = pzem.energy;
-            energy.frequency = pzem.frequency;
-            energy.pf        = pzem.pf;
-
-            /* Ambiente (opcional) */
-            if (xQueuePeek(xEnvSensorQueue, &env_raw, 0) == pdTRUE) {
-                env.temperature = env_raw.temperature;
-                env.humidity    = env_raw.humidity;
-                env.lux         = env_raw.lux;
-            } else {
-                env.temperature = 0;
-                env.humidity    = 0;
-                env.lux         = 0;
-            }
-
-            if (payload_build_energy_json(
-                    payload,
-                    sizeof(payload),
-                    &energy,
-                    &env,
-                    NULL   /* timestamp FUTURO */
-                ))
-            {
-                mqtt_publish_async(MQTT_TOPIC_PZEM, payload);
-                printf("[MQTT] %s\n", payload);
-            }
-        }
-    }
-}
-
-
-/* ===============================
    Task: Publicação MQTT
    =============================== */
 void vTaskMQTTPublisher(void *pv)

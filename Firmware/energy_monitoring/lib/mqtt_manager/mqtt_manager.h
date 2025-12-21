@@ -26,7 +26,6 @@ void mqtt_manager_init(void);
 /* Tasks MQTT (criadas no main) */
 void vTaskMQTTConnection(void *pv);
 void vTaskMQTTPublisher(void *pv);
-void vTaskMQTTAggregator(void *pv);
 
 /* Publicação assíncrona */
 void mqtt_publish_async(const char *topic, const char *payload);

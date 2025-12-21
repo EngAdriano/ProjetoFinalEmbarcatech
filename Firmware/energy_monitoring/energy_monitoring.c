@@ -10,15 +10,17 @@
 #include "task.h"
 #include "queue.h"
 
-/* Drivers e libs */
+/* Tasks / módulos */
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
+#include "mqtt_aggregator.h"
 #include "pzem_task.h"
-//#include "pzem004t.h"
+#include "ui_energy_task.h"
+#include "env_sensors.h"
+
+#include "pzem004t.h"
 #include "rtc_ds3231.h"
 #include "eeprom_at24c32.h"
-#include "ui_energy.h"
-#include "env_sensors.h"
 #include "main.h"
 
 /* ===============================
@@ -27,12 +29,6 @@
 QueueHandle_t xQueuePZEM_Display;
 QueueHandle_t xQueuePZEM_MQTT;
 QueueHandle_t xEnvSensorQueue;
-
-/* ===============================
-   Protótipos locais
-   =============================== */
-void vTaskPZEMReader(void *pv);
-void vTaskDisplay(void *pv);
 
 int main(void)
 {
@@ -89,27 +85,4 @@ int main(void)
     vTaskStartScheduler();
 
     while (1) {}
-}
-
-
-/* ===============================
-   Task: Display
-   =============================== */
-void vTaskDisplay(void *pv)
-{
-    (void) pv;
-
-    pzem_data_t data;
-
-    UI_Energy_ShowSplash();
-    UI_Energy_Init();
-
-    while (1)
-    {
-        if (xQueueReceive(xQueuePZEM_Display, &data, pdMS_TO_TICKS(300))) {
-            UI_Energy_Update(&data);
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(250));
-    }
 }

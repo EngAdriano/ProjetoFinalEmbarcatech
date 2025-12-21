@@ -48,11 +48,13 @@ add_executable(energy_monitoring
         lib/st7735/fonts.c
         lib/aht10/aht10.c
         lib/bh1750/bh1750.c
-        lib/ui/ui_energy.c
+        lib/ui_energy/ui_energy.c
         lib/time_manager/time_manager.c
         lib/env_sensors/env_sensors.c
         lib/payload_builder/payload_builder.c
         lib/pzem_task/pzem_task.c
+        lib/ui_energy/ui_energy_task.c
+        lib/mqtt_aggregator/mqtt_aggregator.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -82,10 +84,11 @@ target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/lib/st7735
         ${CMAKE_CURRENT_LIST_DIR}/lib/aht10
         ${CMAKE_CURRENT_LIST_DIR}/lib/bh1750
-        ${CMAKE_CURRENT_LIST_DIR}/lib/ui
+        ${CMAKE_CURRENT_LIST_DIR}/lib/ui_energy
         ${CMAKE_CURRENT_LIST_DIR}/lib/env_sensors
         ${CMAKE_CURRENT_LIST_DIR}/lib/payload_builder
         ${CMAKE_CURRENT_LIST_DIR}/lib/pzem_task
+        ${CMAKE_CURRENT_LIST_DIR}/lib/mqtt_aggregator
 )
 
 # Add any user requested libraries
