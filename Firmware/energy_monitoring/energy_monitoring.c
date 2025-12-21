@@ -13,7 +13,8 @@
 /* Drivers e libs */
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
-#include "pzem004t.h"
+#include "pzem_task.h"
+//#include "pzem004t.h"
 #include "rtc_ds3231.h"
 #include "eeprom_at24c32.h"
 #include "ui_energy.h"
@@ -90,30 +91,14 @@ int main(void)
     while (1) {}
 }
 
-/* ===============================
-   Task: Leitura do PZEM
-   =============================== */
-void vTaskPZEMReader(void *pv)
-{
-    pzem_data_t data;
-    pzem_init();
-
-    while (1)
-    {
-        if (pzem_read(&data)) {
-            xQueueOverwrite(xQueuePZEM_Display, &data);
-            xQueueOverwrite(xQueuePZEM_MQTT, &data);
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
 
 /* ===============================
    Task: Display
    =============================== */
 void vTaskDisplay(void *pv)
 {
+    (void) pv;
+
     pzem_data_t data;
 
     UI_Energy_ShowSplash();

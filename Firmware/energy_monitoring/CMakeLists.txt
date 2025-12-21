@@ -52,6 +52,7 @@ add_executable(energy_monitoring
         lib/time_manager/time_manager.c
         lib/env_sensors/env_sensors.c
         lib/payload_builder/payload_builder.c
+        lib/pzem_task/pzem_task.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -84,6 +85,7 @@ target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/lib/ui
         ${CMAKE_CURRENT_LIST_DIR}/lib/env_sensors
         ${CMAKE_CURRENT_LIST_DIR}/lib/payload_builder
+        ${CMAKE_CURRENT_LIST_DIR}/lib/pzem_task
 )
 
 # Add any user requested libraries
