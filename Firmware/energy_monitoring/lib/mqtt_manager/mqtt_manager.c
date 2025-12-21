@@ -4,6 +4,7 @@
 #include "lwip/apps/mqtt.h"
 #include "lwip/dns.h"
 #include "lwip/ip_addr.h"
+#include "lwip/err.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -12,6 +13,14 @@
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
 
+#include "payload_builder.h"
+#include "pzem004t.h"
+#include "env_sensors.h"
+
+/* Filas criadas no main */
+extern QueueHandle_t xQueuePZEM_MQTT;
+extern QueueHandle_t xEnvSensorQueue;
+
 /* ===============================
    Configurações MQTT
    =============================== */
@@ -19,6 +28,10 @@
 #define MQTT_BROKER_PORT   1883
 #define MQTT_CLIENT_ID     "pico_freertos_client"
 #define MQTT_KEEPALIVE     60
+#define MQTT_DNS_RETRY_MS  5000
+
+#define MQTT_TOPIC_PZEM "embarcartech/energy/pzem"
+
 
 /* ===============================
    Estado global
@@ -31,20 +44,21 @@ volatile bool g_mqtt_connected = false;
 static mqtt_client_t *mqtt_client = NULL;
 static ip_addr_t broker_ip;
 static QueueHandle_t mqttQueue = NULL;
+static TickType_t last_dns_try = 0;
 
 /* ===============================
-   Callbacks
+   Prototypes internos
    =============================== */
 static void mqtt_dns_callback(const char *name,
-                             const ip_addr_t *ipaddr,
-                             void *callback_arg);
+                              const ip_addr_t *ipaddr,
+                              void *callback_arg);
 
 static void mqtt_connection_cb(mqtt_client_t *client,
                                void *arg,
                                mqtt_connection_status_t status);
 
 /* ===============================
-   Inicialização do MQTT
+   Inicialização do módulo
    =============================== */
 void mqtt_manager_init(void)
 {
@@ -54,10 +68,12 @@ void mqtt_manager_init(void)
         return;
     }
 
-    mqttQueue = xQueueCreate(10, sizeof(mqtt_message_t));
+    mqttQueue = xQueueCreate(1, sizeof(mqtt_message_t));
     if (!mqttQueue) {
         printf("[MQTT] ERRO: Falha ao criar fila MQTT\n");
     }
+
+    g_mqtt_connected = false;
 }
 
 /* ===============================
@@ -65,13 +81,15 @@ void mqtt_manager_init(void)
    =============================== */
 void mqtt_publish_async(const char *topic, const char *payload)
 {
-    if (!mqttQueue || !g_mqtt_connected) return;
+    if (!mqttQueue) return;
 
     mqtt_message_t msg;
     snprintf(msg.topic, sizeof(msg.topic), "%s", topic);
     snprintf(msg.payload, sizeof(msg.payload), "%s", payload);
 
-    xQueueSend(mqttQueue, &msg, 0);
+    //xQueueSend(mqttQueue, &msg, 0);
+    xQueueOverwrite(mqttQueue, &msg);
+
 }
 
 /* ===============================
@@ -122,20 +140,25 @@ static void mqtt_connection_cb(mqtt_client_t *client,
 }
 
 /* ===============================
-   Task MQTT
+   Task: Gerenciamento de conexão
    =============================== */
-void vTaskMQTT(void *pv)
+void vTaskMQTTConnection(void *pv)
 {
-    while (1)
+    (void) pv;
+
+    for (;;)
     {
-        if (!g_wifi_connected) {
+        if (!g_wifi_connected || !mqtt_client) {
             g_mqtt_connected = false;
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
         }
 
-        if (!g_mqtt_connected) {
+        if (!g_mqtt_connected &&
+            (xTaskGetTickCount() - last_dns_try) > pdMS_TO_TICKS(MQTT_DNS_RETRY_MS))
+        {
             printf("[MQTT] Resolvendo DNS...\n");
+            last_dns_try = xTaskGetTickCount();
 
             err_t err = dns_gethostbyname(
                 MQTT_BROKER,
@@ -149,23 +172,100 @@ void vTaskMQTT(void *pv)
             }
         }
 
-        if (g_mqtt_connected) {
-            mqtt_message_t msg;
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
 
-            if (xQueueReceive(mqttQueue, &msg, pdMS_TO_TICKS(500))) {
-                mqtt_publish(
-                    mqtt_client,
-                    msg.topic,
-                    msg.payload,
-                    strlen(msg.payload),
-                    0,
-                    0,
-                    NULL,
-                    NULL
-                );
+/* ===============================
+   Task: Agregador de dados MQTT
+   =============================== */
+void vTaskMQTTAggregator(void *pv)
+{
+    pzem_data_t pzem;
+    env_sensor_data_t env_raw;
+
+    payload_energy_t energy;
+    payload_environment_t env;
+
+    char payload[512];
+
+    for (;;)
+    {
+        if (xQueueReceive(xQueuePZEM_MQTT, &pzem, portMAX_DELAY))
+        {
+            /* Converte PZEM -> payload */
+            energy.voltage   = pzem.voltage;
+            energy.current   = pzem.current;
+            energy.power     = pzem.power;
+            energy.energy    = pzem.energy;
+            energy.frequency = pzem.frequency;
+            energy.pf        = pzem.pf;
+
+            /* Ambiente (opcional) */
+            if (xQueuePeek(xEnvSensorQueue, &env_raw, 0) == pdTRUE) {
+                env.temperature = env_raw.temperature;
+                env.humidity    = env_raw.humidity;
+                env.lux         = env_raw.lux;
+            } else {
+                env.temperature = 0;
+                env.humidity    = 0;
+                env.lux         = 0;
+            }
+
+            if (payload_build_energy_json(
+                    payload,
+                    sizeof(payload),
+                    &energy,
+                    &env,
+                    NULL   /* timestamp FUTURO */
+                ))
+            {
+                mqtt_publish_async(MQTT_TOPIC_PZEM, payload);
+                printf("[MQTT] %s\n", payload);
             }
         }
+    }
+}
 
-        vTaskDelay(pdMS_TO_TICKS(500));
+
+/* ===============================
+   Task: Publicação MQTT
+   =============================== */
+void vTaskMQTTPublisher(void *pv)
+{
+    (void) pv;
+
+    mqtt_message_t msg;
+    err_t err;
+
+    for (;;)
+    {
+        if (!g_mqtt_connected) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
+
+        if (xQueueReceive(mqttQueue, &msg, portMAX_DELAY)) {
+
+            mqtt_publish(
+                mqtt_client,
+                msg.topic,
+                msg.payload,
+                strlen(msg.payload),
+                0,
+                0,
+                NULL,
+                NULL
+            );
+
+            if (err != ERR_OK) {
+            /* Buffer cheio ou conexão instável */
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+    }
+
+            /* OBRIGATÓRIO */
+            vTaskDelay(pdMS_TO_TICKS(300));
+        }
     }
 }

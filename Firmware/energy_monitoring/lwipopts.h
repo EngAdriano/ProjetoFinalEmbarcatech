@@ -89,6 +89,9 @@
 #define SLIP_DEBUG                  LWIP_DBG_OFF
 #define DHCP_DEBUG                  LWIP_DBG_OFF
 
+#define PBUF_POOL_SIZE 32
+
+
 // Aumenta o número de sys_timeouts disponíveis (padrão pode ser 10)
 #define MEMP_NUM_SYS_TIMEOUT 20
 
