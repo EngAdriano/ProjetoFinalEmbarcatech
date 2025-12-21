@@ -6,6 +6,7 @@
 #include "env_sensors.h"
 #include "payload_builder.h"
 #include "mqtt_manager.h"
+#include "time_manager.h"
 
 /* Filas criadas no main */
 extern QueueHandle_t xQueuePZEM_MQTT;
@@ -22,17 +23,18 @@ void vTaskMQTTAggregator(void *pv)
 
     payload_energy_t energy;
     payload_environment_t env;
+    sys_datetime_t now;
 
     char payload[512];
+    char timestamp[32];
 
     printf("[MQTT][AGG] Task iniciada\n");
 
     for (;;)
     {
-        /* Gatilho: novo dado de energia */
         if (xQueueReceive(xQueuePZEM_MQTT, &pzem, portMAX_DELAY))
         {
-            /* Converte dados de energia */
+            /* Energia */
             energy.voltage   = pzem.voltage;
             energy.current   = pzem.current;
             energy.power     = pzem.power;
@@ -40,7 +42,7 @@ void vTaskMQTTAggregator(void *pv)
             energy.frequency = pzem.frequency;
             energy.pf        = pzem.pf;
 
-            /* Dados ambientais (opcional) */
+            /* Ambiente */
             if (xQueuePeek(xEnvSensorQueue, &env_raw, 0) == pdTRUE) {
                 env.temperature = env_raw.temperature;
                 env.humidity    = env_raw.humidity;
@@ -51,13 +53,24 @@ void vTaskMQTTAggregator(void *pv)
                 env.lux         = 0;
             }
 
-            /* Monta JSON */
+            /* Timestamp */
+            time_manager_get(&now);
+            snprintf(timestamp, sizeof(timestamp),
+                     "%04d-%02d-%02dT%02d:%02d:%02d",
+                     now.year,
+                     now.month,
+                     now.day,
+                     now.hour,
+                     now.min,
+                     now.sec);
+
+            /* JSON */
             if (payload_build_energy_json(
                     payload,
                     sizeof(payload),
                     &energy,
                     &env,
-                    NULL   /* timestamp FUTURO */
+                    timestamp
                 ))
             {
                 mqtt_publish_async(MQTT_TOPIC_PZEM, payload);

@@ -6,6 +6,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "semphr.h"
 
 /* Drivers */
 #include "aht10.h"
@@ -13,6 +14,8 @@
 
 /* Módulo */
 #include "env_sensors.h"
+
+extern SemaphoreHandle_t xI2CMutex;
 
 /* =========================
  * Configuração de I2C
@@ -30,15 +33,31 @@ static QueueHandle_t envQueue;
 /* =========================
  * Wrappers AHT10
  * ========================= */
-static int i2c_write_wrapper(uint8_t addr, const uint8_t *data, uint16_t len)
+extern SemaphoreHandle_t xI2CMutex;
+
+int i2c_write_wrapper(uint8_t addr, const uint8_t *data, uint16_t len)
 {
-    return (i2c_write_blocking(I2C_PORT_ENV, addr, data, len, false) < 0) ? -1 : 0;
+    if (xSemaphoreTake(xI2CMutex, portMAX_DELAY) == pdTRUE) {
+        int ret = (i2c_write_blocking(I2C_PORT_ENV, addr, data, len, false) < 0) ? -1 : 0;
+        xSemaphoreGive(xI2CMutex);
+        return ret;
+    }
+    return -1;
 }
 
-static int i2c_read_wrapper(uint8_t addr, uint8_t *data, uint16_t len)
+int i2c_read_wrapper(uint8_t addr, uint8_t *data, uint16_t len)
 {
-    return (i2c_read_blocking(I2C_PORT_ENV, addr, data, len, false) < 0) ? -1 : 0;
+    if (xSemaphoreTake(xI2CMutex, portMAX_DELAY) == pdTRUE) {
+        int ret = (i2c_read_blocking(I2C_PORT_ENV, addr, data, len, false) < 0) ? -1 : 0;
+        xSemaphoreGive(xI2CMutex);
+        return ret;
+    }
+    return -1;
 }
+
+
+
+
 
 static void delay_ms_wrapper(uint32_t ms)
 {

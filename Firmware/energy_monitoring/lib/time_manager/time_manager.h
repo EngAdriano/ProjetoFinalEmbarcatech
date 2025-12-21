@@ -19,6 +19,7 @@ typedef struct {
  * API pública
  * ========================= */
 void time_manager_init(void);
+void time_manager_set_queue(QueueHandle_t queue);
 void time_manager_get(sys_datetime_t *dt);
 void time_manager_set(const sys_datetime_t *dt);
 
