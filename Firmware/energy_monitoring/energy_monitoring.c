@@ -79,7 +79,6 @@ int main(void)
 
     xTaskCreate(vTaskPZEMReader,      "PZEM",     2048, NULL, 2, NULL);
     xTaskCreate(vTaskDisplay,         "DISPLAY",  4096, NULL, 1, NULL);
-
     xTaskCreate(env_sensors_task,     "ENV_SENS", 2048, NULL, 3, NULL);
 
     vTaskStartScheduler();
