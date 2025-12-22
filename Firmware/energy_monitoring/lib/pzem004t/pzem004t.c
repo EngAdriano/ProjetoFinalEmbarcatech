@@ -62,7 +62,7 @@ void pzem_init(void)
     READ_CMD[6] = crc & 0xFF;       // CRC low
     READ_CMD[7] = (crc >> 8) & 0xFF;// CRC high
 
-    printf("[PZEM] UART0 ready 9600 8N1\n");
+    //printf("[PZEM] UART0 ready 9600 8N1\n");
 }
 
 // ----------------------------------------------------

@@ -28,7 +28,7 @@ void vTaskMQTTAggregator(void *pv)
     char payload[512];
     char timestamp[32];
 
-    printf("[MQTT][AGG] Task iniciada\n");
+    //printf("[MQTT][AGG] Task iniciada\n");
 
     for (;;)
     {
@@ -74,7 +74,7 @@ void vTaskMQTTAggregator(void *pv)
                 ))
             {
                 mqtt_publish_async(MQTT_TOPIC_PZEM, payload);
-                printf("[MQTT] %s\n", payload);
+                //printf("[MQTT] %s\n", payload);
             }
         }
     }

@@ -52,7 +52,7 @@ void vTaskWiFiManager(void *pv)
         {
             if (!g_wifi_connected || netif->ip_addr.addr == 0)
             {
-                printf("[WiFi] Conectando em '%s'...\n", WIFI_SSID);
+                //printf("[WiFi] Conectando em '%s'...\n", WIFI_SSID);
 
                 int r = cyw43_arch_wifi_connect_timeout_ms(
                     WIFI_SSID,

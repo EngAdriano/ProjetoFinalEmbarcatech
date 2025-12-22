@@ -55,6 +55,7 @@ add_executable(energy_monitoring
         lib/pzem_task/pzem_task.c
         lib/ui_energy/ui_energy_task.c
         lib/mqtt_aggregator/mqtt_aggregator.c
+        lib/ui_energy/ui_environment.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")

@@ -73,7 +73,7 @@ void mqtt_manager_init(void)
     g_mqtt_connected = false;
     mqtt_publish_busy = false;
 
-    printf("[MQTT] Manager inicializado\n");
+    //printf("[MQTT] Manager inicializado\n");
 }
 
 /* ===============================
@@ -122,7 +122,7 @@ static void mqtt_dns_callback(const char *name,
         .keep_alive = MQTT_KEEPALIVE
     };
 
-    printf("[MQTT] Conectando ao broker...\n");
+    //printf("[MQTT] Conectando ao broker...\n");
 
     mqtt_client_connect(
         mqtt_client,
@@ -146,7 +146,7 @@ static void mqtt_connection_cb(mqtt_client_t *client,
 
     if (status == MQTT_CONNECT_ACCEPTED) {
         g_mqtt_connected = true;
-        printf("[MQTT] Conectado ao broker\n");
+        //printf("[MQTT] Conectado ao broker\n");
     } else {
         g_mqtt_connected = false;
         printf("[MQTT] Erro de conexão (%d)\n", status);
@@ -171,7 +171,7 @@ void vTaskMQTTConnection(void *pv)
         if (!g_mqtt_connected &&
             (xTaskGetTickCount() - last_dns_try) > pdMS_TO_TICKS(MQTT_DNS_RETRY_MS))
         {
-            printf("[MQTT] Resolvendo DNS...\n");
+            //printf("[MQTT] Resolvendo DNS...\n");
             last_dns_try = xTaskGetTickCount();
 
             err_t err = dns_gethostbyname(

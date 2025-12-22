@@ -96,13 +96,13 @@ void env_sensors_task(void *pvParameters)
         .initialized = false
     };
 
-    printf("[ENV] Inicializando AHT10...\n");
+    //printf("[ENV] Inicializando AHT10...\n");
     if (!AHT10_Init(&aht10)) {
         printf("[ENV] ERRO AHT10\n");
         vTaskDelete(NULL);
     }
 
-    printf("[ENV] Inicializando BH1750...\n");
+    //printf("[ENV] Inicializando BH1750...\n");
     bh1750_init(I2C_PORT_ENV);
 
     while (1)

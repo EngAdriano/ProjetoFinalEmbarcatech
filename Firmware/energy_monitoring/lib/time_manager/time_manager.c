@@ -21,7 +21,7 @@ static QueueHandle_t timeQueue = NULL;
 void time_manager_init(void)
 {
     ds3231_init();
-    printf("[TIME] RTC DS3231 inicializado\n");
+    //printf("[TIME] RTC DS3231 inicializado\n");
 }
 
 /* Permite informar a fila ao módulo */
@@ -73,7 +73,7 @@ void task_time(void *pv)
 {
     sys_datetime_t now;
 
-    printf("[TIME] Task TIME iniciada\n");
+    //printf("[TIME] Task TIME iniciada\n");
 
     while (true)
     {
