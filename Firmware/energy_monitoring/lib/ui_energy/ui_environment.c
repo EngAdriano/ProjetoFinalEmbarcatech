@@ -42,7 +42,7 @@ static void ui_env_draw_frame(void)
     /* Placeholder visual (futuro conteúdo) */
     ST7735_DrawRoundRect(10, 40, 140, 50, 6, ST7735_WHITE);
 
-    ST7735_DrawString(28, 58,
+    ST7735_DrawString(17, 58,
                       "EM DESENVOLVIMENTO",
                       Font_7x10,
                       ST7735_CYAN,
