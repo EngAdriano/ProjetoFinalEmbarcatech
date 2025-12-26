@@ -80,3 +80,25 @@ void vTaskWiFiManager(void *pv)
         vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
+
+/* =========================
+ * Status Wi-Fi
+ * ========================= */
+bool wifi_is_connected(void)
+{
+    return (cyw43_tcpip_link_status(&cyw43_state,
+            CYW43_ITF_STA) == CYW43_LINK_UP);
+}
+
+bool wifi_get_ip(char *ip_str, size_t len)
+{
+    if (!wifi_is_connected())
+        return false;
+
+    struct netif *netif = netif_default;
+    if (!netif)
+        return false;
+
+    ip4addr_ntoa_r(netif_ip4_addr(netif), ip_str, len);
+    return true;
+}

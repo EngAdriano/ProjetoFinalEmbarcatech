@@ -1,47 +1,50 @@
 #include <stdio.h>
 #include <string.h>
 
+/* lwIP */
 #include "lwip/apps/mqtt.h"
 #include "lwip/dns.h"
 #include "lwip/ip_addr.h"
 #include "lwip/err.h"
 
+/* FreeRTOS */
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
 
+/* Projeto */
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
 
-/* ===============================
-   Configurações MQTT
-   =============================== */
+/* =========================================================
+ * Configurações MQTT
+ * ========================================================= */
 #define MQTT_BROKER        "broker.hivemq.com"
 #define MQTT_BROKER_PORT   1883
 #define MQTT_CLIENT_ID     "pico_freertos_client"
 #define MQTT_KEEPALIVE     60
 #define MQTT_DNS_RETRY_MS  5000
 
-/* ===============================
-   Estado global
-   =============================== */
+/* =========================================================
+ * Estado global público
+ * ========================================================= */
 volatile bool g_mqtt_connected = false;
 
-/* ===============================
-   Objetos internos
-   =============================== */
+/* =========================================================
+ * Objetos internos
+ * ========================================================= */
 static mqtt_client_t *mqtt_client = NULL;
 static ip_addr_t broker_ip;
+
 static QueueHandle_t mqttQueue = NULL;
 static TickType_t last_dns_try = 0;
 
-/* Controle de fluxo lwIP */
+/* Controle de fluxo do lwIP */
 static volatile bool mqtt_publish_busy = false;
 
-
-/* ===============================
-   Prototypes internos
-   =============================== */
+/* =========================================================
+ * Prototipação interna
+ * ========================================================= */
 static void mqtt_dns_callback(const char *name,
                               const ip_addr_t *ipaddr,
                               void *callback_arg);
@@ -52,9 +55,9 @@ static void mqtt_connection_cb(mqtt_client_t *client,
 
 static void mqtt_pub_request_cb(void *arg, err_t err);
 
-/* ===============================
-   Inicialização do módulo
-   =============================== */
+/* =========================================================
+ * Inicialização do módulo MQTT
+ * ========================================================= */
 void mqtt_manager_init(void)
 {
     mqtt_client = mqtt_client_new();
@@ -63,7 +66,6 @@ void mqtt_manager_init(void)
         return;
     }
 
-    /* Fila com buffer pequeno (evita flood) */
     mqttQueue = xQueueCreate(4, sizeof(mqtt_message_t));
     if (!mqttQueue) {
         printf("[MQTT] ERRO: Falha ao criar fila MQTT\n");
@@ -76,12 +78,13 @@ void mqtt_manager_init(void)
     //printf("[MQTT] Manager inicializado\n");
 }
 
-/* ===============================
-   Publicação assíncrona (thread-safe)
-   =============================== */
+/* =========================================================
+ * Publicação assíncrona (thread-safe)
+ * ========================================================= */
 void mqtt_publish_async(const char *topic, const char *payload)
 {
-    if (!mqttQueue) return;
+    if (!mqttQueue || !topic || !payload)
+        return;
 
     mqtt_message_t msg;
 
@@ -91,9 +94,9 @@ void mqtt_publish_async(const char *topic, const char *payload)
     xQueueSend(mqttQueue, &msg, 0);
 }
 
-/* ===============================
-   Callback de publicação concluída
-   =============================== */
+/* =========================================================
+ * Callback: publicação concluída
+ * ========================================================= */
 static void mqtt_pub_request_cb(void *arg, err_t err)
 {
     (void)arg;
@@ -101,17 +104,18 @@ static void mqtt_pub_request_cb(void *arg, err_t err)
     mqtt_publish_busy = false;
 }
 
-/* ===============================
-   DNS callback
-   =============================== */
+/* =========================================================
+ * Callback: DNS resolvido
+ * ========================================================= */
 static void mqtt_dns_callback(const char *name,
                               const ip_addr_t *ipaddr,
                               void *callback_arg)
 {
+    (void)name;
     (void)callback_arg;
 
     if (!ipaddr) {
-        printf("[MQTT] DNS falhou para %s\n", name);
+        printf("[MQTT] DNS falhou\n");
         return;
     }
 
@@ -121,8 +125,6 @@ static void mqtt_dns_callback(const char *name,
         .client_id  = MQTT_CLIENT_ID,
         .keep_alive = MQTT_KEEPALIVE
     };
-
-    //printf("[MQTT] Conectando ao broker...\n");
 
     mqtt_client_connect(
         mqtt_client,
@@ -134,9 +136,9 @@ static void mqtt_dns_callback(const char *name,
     );
 }
 
-/* ===============================
-   Callback de conexão
-   =============================== */
+/* =========================================================
+ * Callback: conexão MQTT
+ * ========================================================= */
 static void mqtt_connection_cb(mqtt_client_t *client,
                                void *arg,
                                mqtt_connection_status_t status)
@@ -149,20 +151,21 @@ static void mqtt_connection_cb(mqtt_client_t *client,
         //printf("[MQTT] Conectado ao broker\n");
     } else {
         g_mqtt_connected = false;
-        printf("[MQTT] Erro de conexão (%d)\n", status);
+        printf("[MQTT] Falha na conexão (%d)\n", status);
     }
 }
 
-/* ===============================
-   Task: Gerenciamento de conexão
-   =============================== */
+/* =========================================================
+ * Task: Gerenciamento de conexão MQTT
+ * ========================================================= */
 void vTaskMQTTConnection(void *pv)
 {
     (void) pv;
 
     for (;;)
     {
-        if (!g_wifi_connected || !mqtt_client) {
+        if (!g_wifi_connected || !mqtt_client)
+        {
             g_mqtt_connected = false;
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
@@ -171,7 +174,6 @@ void vTaskMQTTConnection(void *pv)
         if (!g_mqtt_connected &&
             (xTaskGetTickCount() - last_dns_try) > pdMS_TO_TICKS(MQTT_DNS_RETRY_MS))
         {
-            //printf("[MQTT] Resolvendo DNS...\n");
             last_dns_try = xTaskGetTickCount();
 
             err_t err = dns_gethostbyname(
@@ -181,7 +183,8 @@ void vTaskMQTTConnection(void *pv)
                 NULL
             );
 
-            if (err == ERR_OK) {
+            if (err == ERR_OK)
+            {
                 mqtt_dns_callback(MQTT_BROKER, &broker_ip, NULL);
             }
         }
@@ -190,9 +193,9 @@ void vTaskMQTTConnection(void *pv)
     }
 }
 
-/* ===============================
-   Task: Publicação MQTT
-   =============================== */
+/* =========================================================
+ * Task: Publicação MQTT
+ * ========================================================= */
 void vTaskMQTTPublisher(void *pv)
 {
     (void) pv;
@@ -202,15 +205,16 @@ void vTaskMQTTPublisher(void *pv)
 
     for (;;)
     {
-        if (!g_mqtt_connected) {
+        if (!g_mqtt_connected)
+        {
             vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }
 
         if (xQueueReceive(mqttQueue, &msg, portMAX_DELAY))
         {
-            /* Aguarda liberação do lwIP */
-            if (mqtt_publish_busy) {
+            if (mqtt_publish_busy)
+            {
                 vTaskDelay(pdMS_TO_TICKS(100));
                 continue;
             }
@@ -222,20 +226,28 @@ void vTaskMQTTPublisher(void *pv)
                 msg.topic,
                 msg.payload,
                 strlen(msg.payload),
-                0,          /* QoS 0 */
-                0,          /* retain */
+                0,  /* QoS */
+                0,  /* retain */
                 mqtt_pub_request_cb,
                 NULL
             );
 
-            if (err != ERR_OK) {
+            if (err != ERR_OK)
+            {
                 mqtt_publish_busy = false;
                 vTaskDelay(pdMS_TO_TICKS(200));
                 continue;
             }
 
-            /* Evita flood do stack TCP */
-            vTaskDelay(pdMS_TO_TICKS(500));
+            vTaskDelay(pdMS_TO_TICKS(500)); /* evita flood TCP */
         }
     }
+}
+
+/* =========================================================
+ * API pública de status (usada pela UI)
+ * ========================================================= */
+bool mqtt_is_connected(void)
+{
+    return g_mqtt_connected;
 }

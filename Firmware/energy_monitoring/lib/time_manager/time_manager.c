@@ -21,7 +21,7 @@ static QueueHandle_t timeQueue = NULL;
 void time_manager_init(void)
 {
     ds3231_init();
-    //printf("[TIME] RTC DS3231 inicializado\n");
+    // printf("[TIME] RTC DS3231 inicializado\n");
 }
 
 /* Permite informar a fila ao módulo */
@@ -54,13 +54,13 @@ void time_manager_get(sys_datetime_t *dt)
 void time_manager_set(const sys_datetime_t *dt)
 {
     ds3231_time_t rtc = {
-        .year    = dt->year,
-        .month   = dt->month,
-        .day     = dt->day,
-        .hours   = dt->hour,
-        .minutes = dt->min,
-        .seconds = dt->sec,
-        .day_of_week = 1
+        .year         = dt->year,
+        .month        = dt->month,
+        .day          = dt->day,
+        .hours        = dt->hour,
+        .minutes      = dt->min,
+        .seconds      = dt->sec,
+        .day_of_week  = 1
     };
 
     ds3231_set_time(&rtc);
@@ -71,9 +71,11 @@ void time_manager_set(const sys_datetime_t *dt)
  * ===================================== */
 void task_time(void *pv)
 {
-    sys_datetime_t now;
+    (void) pv;
 
-    //printf("[TIME] Task TIME iniciada\n");
+    sys_datetime_t now = {0};
+
+    // printf("[TIME] Task TIME iniciada\n");
 
     while (true)
     {

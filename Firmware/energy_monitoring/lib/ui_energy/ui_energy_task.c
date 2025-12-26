@@ -1,13 +1,31 @@
 #include "ui_energy_task.h"
+
+/* UI */
 #include "ui_energy.h"
-#include "queue.h"
-#include <stdio.h>
-#include "hardware/gpio.h"
-#include <stdbool.h>
 #include "ui_environment.h"
+
+/* Módulos */
+#include "env_sensors.h"
+#include "wifi_manager.h"
+#include "mqtt_manager.h"
+#include "time_manager.h"
+
+/* FreeRTOS */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+
+/* Hardware */
+#include "hardware/gpio.h"
+
+#include <stdbool.h>
+#include <stdio.h>
 
 #define UI_BUTTON_GPIO 5
 
+/* =========================
+ * Controle de telas
+ * ========================= */
 typedef enum {
     UI_SCREEN_ENERGY = 0,
     UI_SCREEN_ENV
@@ -15,23 +33,32 @@ typedef enum {
 
 static ui_screen_t current_screen = UI_SCREEN_ENERGY;
 
-
-/* Fila criada no main */
+/* =========================
+ * Queues externas (criadas no main)
+ * ========================= */
 extern QueueHandle_t xQueuePZEM_Display;
+extern QueueHandle_t xEnvSensorQueue;
+extern QueueHandle_t timeQueue;
 
+/* =========================
+ * Inicialização do botão
+ * ========================= */
 static void ui_button_init(void)
 {
     gpio_init(UI_BUTTON_GPIO);
     gpio_set_dir(UI_BUTTON_GPIO, GPIO_IN);
-    gpio_pull_up(UI_BUTTON_GPIO);   // botão ligado ao GND
+    gpio_pull_up(UI_BUTTON_GPIO);   /* botão ligado ao GND */
 }
 
+/* =========================
+ * Leitura do botão (toggle tela)
+ * ========================= */
 static void ui_handle_button(void)
 {
     static bool last_state = true;
     bool current_state = gpio_get(UI_BUTTON_GPIO);
 
-    // Detecta borda de descida (pressionado)
+    /* Detecta borda de descida */
     if (last_state && !current_state)
     {
         current_screen =
@@ -39,33 +66,43 @@ static void ui_handle_button(void)
             ? UI_SCREEN_ENV
             : UI_SCREEN_ENERGY;
 
-        vTaskDelay(pdMS_TO_TICKS(300)); // debounce
+        vTaskDelay(pdMS_TO_TICKS(300)); /* debounce */
     }
 
     last_state = current_state;
 }
 
-
+/* =========================
+ * Task principal do display
+ * ========================= */
 void vTaskDisplay(void *pv)
 {
     (void) pv;
 
-    pzem_data_t data;
+    pzem_data_t       pzem_data;
+    env_sensor_data_t env_data = {0};
+
+    sys_datetime_t now;
+
+    int hour   = -1;
+    int minute = -1;
+
     ui_screen_t last_screen = UI_SCREEN_ENERGY;
 
+    char ip_str[16] = "---.---.---.---";
+
+    /* Inicializações */
     ui_button_init();
 
     UI_Energy_ShowSplash();
     UI_Energy_Init();
 
-    //printf("[UI] Display inicializado\n");
-
     for (;;)
     {
-        /* ===== BOTÃO ===== */
+        /* ================= BOTÃO ================= */
         ui_handle_button();
 
-        /* ===== TROCA DE TELA ===== */
+        /* ================= TROCA DE TELA ================= */
         if (current_screen != last_screen)
         {
             if (current_screen == UI_SCREEN_ENERGY)
@@ -80,13 +117,37 @@ void vTaskDisplay(void *pv)
             last_screen = current_screen;
         }
 
-        /* ===== ATUALIZAÇÃO DA TELA ATIVA ===== */
+        /* ================= TELA DE ENERGIA ================= */
         if (current_screen == UI_SCREEN_ENERGY)
         {
-            if (xQueueReceive(xQueuePZEM_Display, &data, 0))
+            if (xQueueReceive(xQueuePZEM_Display, &pzem_data, 0) == pdPASS)
             {
-                UI_Energy_Update(&data);
+                UI_Energy_Update(&pzem_data);
             }
+        }
+
+        /* ================= TELA AMBIENTAL ================= */
+        else if (current_screen == UI_SCREEN_ENV)
+        {
+            /* Dados ambientais (não bloqueante) */
+            xQueueReceive(xEnvSensorQueue, &env_data, 0);
+
+            /* Hora atual (não bloqueante) */
+            if (xQueueReceive(timeQueue, &now, 0) == pdPASS)
+            {
+                hour   = now.hour;
+                minute = now.min;   /* ATENÇÃO: é 'min' */
+            }
+
+            /* IP atual */
+            wifi_get_ip(ip_str, sizeof(ip_str));
+
+            /* Atualiza UI ambiental */
+            UI_Env_Update(&env_data,
+                          wifi_is_connected(),
+                          ip_str,
+                          hour,
+                          minute);
         }
 
         vTaskDelay(pdMS_TO_TICKS(100));

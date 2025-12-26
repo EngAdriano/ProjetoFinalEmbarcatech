@@ -16,6 +16,9 @@ void mqtt_publish_async(const char *topic, const char *payload);
 void vTaskMQTTConnection(void *pv);
 void vTaskMQTTPublisher(void *pv);
 
+/* Retorna true se MQTT estiver conectado ao broker */
+bool mqtt_is_connected(void);
+
 /* Estado da conexão */
 extern volatile bool g_mqtt_connected;
 
