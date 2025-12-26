@@ -57,7 +57,7 @@ add_executable(energy_monitoring
         lib/mqtt_aggregator/mqtt_aggregator.c
         lib/ui_energy/ui_environment.c
         lib/web_server/web_server_task.c
-        lib/web_server/web_pages.c
+        lib/web_server/auth_storage.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")

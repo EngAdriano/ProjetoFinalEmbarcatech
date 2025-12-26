@@ -20,13 +20,18 @@
 /* Cache de dados ambientais */
 #include "mqtt_aggregator.h"
 
+/* Armazenamento de autenticação */
+#include "auth_storage.h"
+
 /* =====================================================
  * Configurações
  * ===================================================== */
 #define WEB_PORT 80
 
-#define LOGIN_USER "admin"
-#define LOGIN_PASS "1234"
+/* Credenciais de login */
+static char login_user[32];
+static char login_pass[32];
+
 
 #define SESSION_TIMEOUT_MS   (5 * 60 * 1000)   // 5 minutos
 
@@ -171,8 +176,9 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
         if (body)
             sscanf(body, "%31[^,],%31s", user, pass);
 
-        if (!strcmp(user, LOGIN_USER) &&
-            !strcmp(pass, LOGIN_PASS))
+        if (!strcmp(user, login_user) &&
+            !strcmp(pass, login_pass))
+
         {
             user_logged = true;
             session_touch();
@@ -286,6 +292,11 @@ void vTaskWebServer(void *pv)
     (void) pv;
 
     vTaskDelay(pdMS_TO_TICKS(3000));
+
+    auth_load(login_user, login_pass);
+
+    printf("[AUTH] Usuario carregado da EEPROM: %s\n", login_user);
+
 
     struct tcp_pcb *pcb = tcp_new();
     if (!pcb)
