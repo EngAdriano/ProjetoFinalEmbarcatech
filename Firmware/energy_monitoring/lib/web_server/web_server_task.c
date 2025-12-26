@@ -17,22 +17,15 @@
 #include "lwip/tcp.h"
 #include "lwip/ip_addr.h"
 
-/* Cache de dados ambientais */
+/* Projeto */
 #include "mqtt_aggregator.h"
-
-/* Armazenamento de autenticação */
 #include "auth_storage.h"
+#include "sha256.h"
 
 /* =====================================================
  * Configurações
  * ===================================================== */
 #define WEB_PORT 80
-
-/* Credenciais de login */
-static char login_user[32];
-static char login_pass[32];
-
-
 #define SESSION_TIMEOUT_MS   (5 * 60 * 1000)   // 5 minutos
 
 /* =====================================================
@@ -40,6 +33,10 @@ static char login_pass[32];
  * ===================================================== */
 static bool user_logged = false;
 static TickType_t last_activity_tick = 0;
+
+/* Credenciais carregadas da EEPROM */
+static char     login_user[32];
+static uint8_t  login_pass_hash[32];
 
 /* =====================================================
  * HTML – Login
@@ -84,23 +81,24 @@ static const char html_index[] =
 "HTTP/1.1 200 OK\r\n"
 "Content-Type: text/html\r\n\r\n"
 "<!DOCTYPE html>"
-"<html>"
-"<head>"
+"<html><head>"
 "<meta charset='utf-8'>"
 "<title>Embarcatech Dashboard</title>"
 "<style>"
 "body{background:#111;color:#eee;font-family:Arial;margin:0;padding:0;}"
 "h1{background:#0a74da;padding:10px;margin:0;text-align:center;}"
 ".top{display:flex;justify-content:flex-end;padding:10px;}"
-".top a{color:#fff;text-decoration:none;}"
+".top a{color:#fff;text-decoration:none;margin-left:15px;}"
 ".container{display:flex;justify-content:center;margin-top:20px;}"
 ".card{background:#222;border-radius:8px;padding:20px;margin:10px;width:200px;}"
 ".label{color:#0a74da;font-size:14px;}"
 ".value{font-size:28px;margin-top:10px;}"
-"</style>"
-"</head>"
+"</style></head>"
 "<body>"
-"<div class='top'><a href='/logout'>Logout</a></div>"
+"<div class='top'>"
+"<a href='/config/auth'>Configurar Login</a>"
+"<a href='/logout'>Logout</a>"
+"</div>"
 "<h1>Embarcatech - Dashboard</h1>"
 "<div class='container'>"
 "<div class='card'><div class='label'>Temperatura</div><div class='value' id='temp'>--</div></div>"
@@ -119,6 +117,41 @@ static const char html_index[] =
 "</body></html>";
 
 /* =====================================================
+ * HTML – Configurar Credenciais
+ * ===================================================== */
+static const char html_auth_cfg[] =
+"HTTP/1.1 200 OK\r\n"
+"Content-Type: text/html\r\n\r\n"
+"<!DOCTYPE html>"
+"<html><head>"
+"<meta charset='utf-8'>"
+"<title>Configurar Login</title>"
+"<style>"
+"body{background:#111;color:#eee;font-family:Arial;"
+"display:flex;justify-content:center;align-items:center;height:100vh;}"
+".box{background:#222;padding:20px;border-radius:8px;width:300px;}"
+"h2{text-align:center;color:#0a74da;}"
+"input,button{width:100%;padding:10px;margin-top:10px;"
+"border-radius:4px;border:none;}"
+"button{background:#0a74da;color:#fff;font-size:16px;}"
+"</style></head>"
+"<body>"
+"<div class='box'>"
+"<h2>Credenciais</h2>"
+"<input id='u' placeholder='Novo usuário'>"
+"<input id='p' type='password' placeholder='Nova senha'>"
+"<button onclick='save()'>Salvar</button>"
+"<p id='m'></p>"
+"<a href='/'>Voltar</a>"
+"</div>"
+"<script>"
+"function save(){"
+"fetch('/config/auth',{method:'POST',body:u.value+','+p.value})"
+".then(r=>r.text()).then(t=>m.innerText=t);}"
+"</script>"
+"</body></html>";
+
+/* =====================================================
  * Protótipos
  * ===================================================== */
 static err_t http_accept(void *arg, struct tcp_pcb *newpcb, err_t err);
@@ -126,7 +159,7 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
                        struct pbuf *p, err_t err);
 
 /* =====================================================
- * Funções de sessão
+ * Sessão
  * ===================================================== */
 static bool session_is_valid(void)
 {
@@ -172,26 +205,22 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
 
         char *body = strstr(req, "\r\n\r\n");
         if (body) body += 4;
+        if (body) sscanf(body, "%31[^,],%31s", user, pass);
 
-        if (body)
-            sscanf(body, "%31[^,],%31s", user, pass);
+        uint8_t hash[32];
+        sha256((const uint8_t *)pass, strlen(pass), hash);
 
         if (!strcmp(user, login_user) &&
-            !strcmp(pass, login_pass))
-
+            memcmp(hash, login_pass_hash, 32) == 0)
         {
             user_logged = true;
             session_touch();
-
-            tcp_write(tpcb,
-                "HTTP/1.1 200 OK\r\n\r\n",
-                19, TCP_WRITE_FLAG_COPY);
+            tcp_write(tpcb, "HTTP/1.1 200 OK\r\n\r\n", 19, TCP_WRITE_FLAG_COPY);
         }
         else
         {
-            tcp_write(tpcb,
-                "HTTP/1.1 401 Unauthorized\r\n\r\n",
-                29, TCP_WRITE_FLAG_COPY);
+            tcp_write(tpcb, "HTTP/1.1 401 Unauthorized\r\n\r\n",
+                      29, TCP_WRITE_FLAG_COPY);
         }
     }
 
@@ -199,14 +228,54 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
     else if (strstr(req, "GET /logout"))
     {
         user_logged = false;
-
         tcp_write(tpcb,
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: text/html\r\n\r\n"
             "<html><body><h2>Logout efetuado</h2>"
             "<a href='/'>Voltar</a></body></html>",
-            110,
-            TCP_WRITE_FLAG_COPY);
+            110, TCP_WRITE_FLAG_COPY);
+    }
+
+    /* ---------- CONFIG AUTH ---------- */
+    else if (strstr(req, "GET /config/auth"))
+    {
+        if (!session_is_valid())
+            tcp_write(tpcb, "HTTP/1.1 403 Forbidden\r\n\r\n",
+                      26, TCP_WRITE_FLAG_COPY);
+        else
+            tcp_write(tpcb, html_auth_cfg,
+                      strlen(html_auth_cfg), TCP_WRITE_FLAG_COPY);
+    }
+    else if (strstr(req, "POST /config/auth"))
+    {
+        if (!session_is_valid())
+        {
+            tcp_write(tpcb, "HTTP/1.1 403 Forbidden\r\n\r\n",
+                      26, TCP_WRITE_FLAG_COPY);
+        }
+        else
+        {
+            char user[32] = {0};
+            char pass[32] = {0};
+
+            char *body = strstr(req, "\r\n\r\n");
+            if (body) body += 4;
+            if (body) sscanf(body, "%31[^,],%31s", user, pass);
+
+            if (auth_save(user, pass))
+            {
+                auth_load(login_user, login_pass_hash);
+                tcp_write(tpcb,
+                    "HTTP/1.1 200 OK\r\n\r\nCredenciais atualizadas",
+                    56, TCP_WRITE_FLAG_COPY);
+            }
+            else
+            {
+                tcp_write(tpcb,
+                    "HTTP/1.1 400 Bad Request\r\n\r\nErro",
+                    40, TCP_WRITE_FLAG_COPY);
+            }
+        }
     }
 
     /* ---------- ENV ---------- */
@@ -214,14 +283,12 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
     {
         if (!session_is_valid())
         {
-            tcp_write(tpcb,
-                "HTTP/1.1 403 Forbidden\r\n\r\n",
-                26, TCP_WRITE_FLAG_COPY);
+            tcp_write(tpcb, "HTTP/1.1 403 Forbidden\r\n\r\n",
+                      26, TCP_WRITE_FLAG_COPY);
         }
         else
         {
             session_touch();
-
             const env_sensor_data_t *env = env_get_last();
             char resp[256];
 
@@ -235,12 +302,9 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
                 "}",
                 env->temperature,
                 env->humidity,
-                env->lux
-            );
+                env->lux);
 
-            tcp_write(tpcb, resp,
-                      strlen(resp),
-                      TCP_WRITE_FLAG_COPY);
+            tcp_write(tpcb, resp, strlen(resp), TCP_WRITE_FLAG_COPY);
         }
     }
 
@@ -248,20 +312,11 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
     else
     {
         if (session_is_valid())
-        {
-            session_touch();
-            tcp_write(tpcb,
-                html_index,
-                strlen(html_index),
-                TCP_WRITE_FLAG_COPY);
-        }
+            tcp_write(tpcb, html_index,
+                      strlen(html_index), TCP_WRITE_FLAG_COPY);
         else
-        {
-            tcp_write(tpcb,
-                html_login,
-                strlen(html_login),
-                TCP_WRITE_FLAG_COPY);
-        }
+            tcp_write(tpcb, html_login,
+                      strlen(html_login), TCP_WRITE_FLAG_COPY);
     }
 
     tcp_output(tpcb);
@@ -269,7 +324,6 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
 
     free(req);
     pbuf_free(p);
-
     return ERR_OK;
 }
 
@@ -293,11 +347,16 @@ void vTaskWebServer(void *pv)
 
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    auth_load(login_user, login_pass);
+    auth_load(login_user, login_pass_hash);
 
-    printf("[AUTH] Usuario carregado da EEPROM: %s\n", login_user);
-
-
+    /*
+    printf("[AUTH] Usuario EEPROM: '%s'\n", login_user);
+    printf("[AUTH] Hash EEPROM: ");
+    for (int i = 0; i < 32; i++)
+        printf("%02X", login_pass_hash[i]);
+    printf("\n");
+    */
+   
     struct tcp_pcb *pcb = tcp_new();
     if (!pcb)
     {

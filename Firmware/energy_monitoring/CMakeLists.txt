@@ -58,6 +58,7 @@ add_executable(energy_monitoring
         lib/ui_energy/ui_environment.c
         lib/web_server/web_server_task.c
         lib/web_server/auth_storage.c
+        lib/web_server/sha256.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
