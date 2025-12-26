@@ -25,7 +25,7 @@
 #define WEB_PORT 80
 
 /* =========================
- * Página HTML principal
+ * Página HTML (Dashboard)
  * ========================= */
 static const char html_index[] =
 "HTTP/1.1 200 OK\r\n"
@@ -34,31 +34,57 @@ static const char html_index[] =
 "<html>"
 "<head>"
 "<meta charset='utf-8'>"
-"<title>Embarcatech</title>"
+"<title>Embarcatech Dashboard</title>"
+"<style>"
+"body{background:#111;color:#eee;font-family:Arial;margin:0;padding:0;}"
+"h1{background:#0a74da;padding:10px;margin:0;text-align:center;}"
+".container{display:flex;justify-content:center;margin-top:20px;}"
+".card{background:#222;border-radius:8px;padding:20px;margin:10px;width:200px;}"
+".label{color:#0a74da;font-size:14px;}"
+".value{font-size:28px;margin-top:10px;}"
+"</style>"
 "</head>"
-"<body style='background:#111;color:#0f0;font-family:Arial;'>"
-"<h1>Sistema IoT - Embarcatech</h1>"
-"<p>Dados Ambientais:</p>"
-"<pre id='env'>Carregando...</pre>"
+"<body>"
+"<h1>Embarcatech - Dashboard</h1>"
+"<div class='container'>"
+" <div class='card'>"
+"  <div class='label'>Temperatura</div>"
+"  <div class='value' id='temp'>--</div>"
+" </div>"
+" <div class='card'>"
+"  <div class='label'>Umidade</div>"
+"  <div class='value' id='hum'>--</div>"
+" </div>"
+" <div class='card'>"
+"  <div class='label'>Luminosidade</div>"
+"  <div class='value' id='lux'>--</div>"
+" </div>"
+"</div>"
 "<script>"
-"setInterval(()=>{"
+"function updateEnv(){"
 " fetch('/env')"
-"  .then(r=>r.text())"
-"  .then(t=>document.getElementById('env').innerText=t);"
-"},1000);"
+"  .then(r=>r.json())"
+"  .then(d=>{"
+"    temp.innerText=d.temperature.toFixed(1)+' °C';"
+"    hum.innerText=d.humidity.toFixed(1)+' %';"
+"    lux.innerText=d.lux.toFixed(1)+' lx';"
+"  });"
+"}"
+"setInterval(updateEnv,1000);"
+"updateEnv();"
 "</script>"
 "</body>"
 "</html>";
 
 /* =========================
- * Prototipos internos
+ * Prototipos
  * ========================= */
 static err_t http_accept(void *arg, struct tcp_pcb *newpcb, err_t err);
 static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
                        struct pbuf *p, err_t err);
 
 /* =========================
- * Handler de recepção HTTP
+ * Handler HTTP
  * ========================= */
 static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
                        struct pbuf *p, err_t err)
@@ -71,13 +97,10 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
 
     tcp_recved(tpcb, p->tot_len);
 
-    /* Copia requisição */
     char *req = calloc(p->len + 1, 1);
     memcpy(req, p->payload, p->len);
 
-    /* =========================
-     * Endpoint: /env
-     * ========================= */
+    /* ========= JSON /env ========= */
     if (strstr(req, "GET /env"))
     {
         const env_sensor_data_t *env = env_get_last();
@@ -85,10 +108,12 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
 
         snprintf(resp, sizeof(resp),
             "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plain\r\n\r\n"
-            "Temperatura: %.1f C\n"
-            "Umidade: %.1f %%\n"
-            "Luminosidade: %.1f lx\n",
+            "Content-Type: application/json\r\n\r\n"
+            "{"
+            "\"temperature\":%.2f,"
+            "\"humidity\":%.2f,"
+            "\"lux\":%.2f"
+            "}",
             env->temperature,
             env->humidity,
             env->lux
@@ -99,8 +124,7 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
     else
     {
         /* Página principal */
-        tcp_write(tpcb,
-                  html_index,
+        tcp_write(tpcb, html_index,
                   strlen(html_index),
                   TCP_WRITE_FLAG_COPY);
     }
@@ -115,30 +139,29 @@ static err_t http_recv(void *arg, struct tcp_pcb *tpcb,
 }
 
 /* =========================
- * Handler de nova conexão
+ * Nova conexão
  * ========================= */
 static err_t http_accept(void *arg,
-                          struct tcp_pcb *newpcb,
-                          err_t err)
+                         struct tcp_pcb *newpcb,
+                         err_t err)
 {
     tcp_recv(newpcb, http_recv);
     return ERR_OK;
 }
 
 /* =========================
- * Task do servidor web
+ * Task Web Server
  * ========================= */
 void vTaskWebServer(void *pv)
 {
     (void) pv;
 
-    /* Aguarda Wi-Fi estabilizar */
     vTaskDelay(pdMS_TO_TICKS(3000));
 
     struct tcp_pcb *pcb = tcp_new();
     if (!pcb)
     {
-        printf("[WEB] ERRO: tcp_new() falhou\n");
+        printf("[WEB] ERRO: tcp_new()\n");
         vTaskDelete(NULL);
     }
 
@@ -146,9 +169,8 @@ void vTaskWebServer(void *pv)
     pcb = tcp_listen(pcb);
     tcp_accept(pcb, http_accept);
 
-    printf("[WEB] Servidor web ativo na porta %d\n", WEB_PORT);
+    printf("[WEB] Dashboard web ativo na porta %d\n", WEB_PORT);
 
-    /* Task passiva */
     while (true)
     {
         vTaskDelay(pdMS_TO_TICKS(10000));
