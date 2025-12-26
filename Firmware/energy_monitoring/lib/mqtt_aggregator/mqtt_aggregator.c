@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 #include "pzem004t.h"
-#include "env_sensors.h"
 #include "payload_builder.h"
 #include "mqtt_manager.h"
 #include "time_manager.h"
@@ -13,6 +12,15 @@ extern QueueHandle_t xQueuePZEM_MQTT;
 extern QueueHandle_t xEnvSensorQueue;
 
 #define MQTT_TOPIC_PZEM "embarcartech/energy/pzem"
+
+static env_sensor_data_t env_last = {0};
+
+const env_sensor_data_t *env_get_last(void)
+{
+    return &env_last;
+}
+
+
 
 void vTaskMQTTAggregator(void *pv)
 {
@@ -43,15 +51,16 @@ void vTaskMQTTAggregator(void *pv)
             energy.pf        = pzem.pf;
 
             /* Ambiente */
-            if (xQueuePeek(xEnvSensorQueue, &env_raw, 0) == pdTRUE) {
-                env.temperature = env_raw.temperature;
-                env.humidity    = env_raw.humidity;
-                env.lux         = env_raw.lux;
-            } else {
-                env.temperature = 0;
-                env.humidity    = 0;
-                env.lux         = 0;
-            }
+            if (xQueueReceive(xEnvSensorQueue, &env_raw, 0) == pdTRUE)
+                {
+                    env_last = env_raw;   /* Atualiza cache */
+                }
+
+                /* Usa SEMPRE o último valor válido */
+                env.temperature = env_last.temperature;
+                env.humidity    = env_last.humidity;
+                env.lux         = env_last.lux;
+
 
             /* Timestamp */
             time_manager_get(&now);

@@ -9,6 +9,7 @@
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
 #include "time_manager.h"
+#include "mqtt_aggregator.h"
 
 /* FreeRTOS */
 #include "FreeRTOS.h"
@@ -130,7 +131,15 @@ void vTaskDisplay(void *pv)
         else if (current_screen == UI_SCREEN_ENV)
         {
             /* Dados ambientais (não bloqueante) */
-            xQueueReceive(xEnvSensorQueue, &env_data, 0);
+            //xQueueReceive(xEnvSensorQueue, &env_data, 0);
+
+            const env_sensor_data_t *env_ptr = env_get_last();
+
+            if (env_ptr)
+            {
+                env_data = *env_ptr;
+            }
+
 
             /* Hora atual (não bloqueante) */
             if (xQueueReceive(timeQueue, &now, 0) == pdPASS)

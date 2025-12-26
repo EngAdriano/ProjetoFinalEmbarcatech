@@ -1,10 +1,12 @@
 #ifndef MQTT_AGGREGATOR_H
 #define MQTT_AGGREGATOR_H
 
-#include "FreeRTOS.h"
-#include "task.h"
+#include "env_sensors.h"   // <<< OBRIGATÓRIO
 
-/* Task agregadora MQTT (criada no main) */
+/* Task MQTT */
 void vTaskMQTTAggregator(void *pv);
 
-#endif
+/* Acesso ao último dado ambiental (cache) */
+const env_sensor_data_t *env_get_last(void);
+
+#endif /* MQTT_AGGREGATOR_H */
