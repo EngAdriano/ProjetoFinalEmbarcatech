@@ -99,6 +99,10 @@
 #define MEMP_NUM_NETCONN 16
 
 // Outras configurações comuns para melhorar estabilidade
-#define LWIP_TCP_KEEPALIVE 1
+
+#define LWIP_HTTPD 1
+#define HTTPD_ENABLE_CUSTOM_FS 1
+#define HTTPD_MAX_URI_LEN 64
+
 
 #endif /* __LWIPOPTS_H__ */

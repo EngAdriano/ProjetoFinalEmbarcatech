@@ -19,6 +19,7 @@
 #include "ui_energy_task.h"
 #include "env_sensors.h"
 #include "time_manager.h"
+#include "web_server_task.h"
 
 #include "pzem004t.h"
 #include "rtc_ds3231.h"
@@ -89,6 +90,7 @@ int main(void)
 
     /* ==== Criação das tasks ==== */
     xTaskCreate(vTaskWiFiManager,     "WIFI",     2048, NULL, 3, NULL);
+    xTaskCreate(vTaskWebServer,       "WEB",      2048, NULL, 1, NULL);
 
     xTaskCreate(vTaskMQTTConnection,  "MQTT_CONN",2048, NULL, 3, NULL);
     xTaskCreate(vTaskMQTTPublisher,   "MQTT_PUB", 2048, NULL, 2, NULL);

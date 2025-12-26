@@ -56,9 +56,6 @@ int i2c_read_wrapper(uint8_t addr, uint8_t *data, uint16_t len)
 }
 
 
-
-
-
 static void delay_ms_wrapper(uint32_t ms)
 {
     vTaskDelay(pdMS_TO_TICKS(ms));
@@ -87,6 +84,8 @@ void env_sensors_init(void)
  * ========================= */
 void env_sensors_task(void *pvParameters)
 {
+    (void) pvParameters;
+
     AHT10_Handle aht10 = {
         .iface = {
             .i2c_write = i2c_write_wrapper,
@@ -96,29 +95,38 @@ void env_sensors_task(void *pvParameters)
         .initialized = false
     };
 
-    //printf("[ENV] Inicializando AHT10...\n");
+    /* Inicializa AHT10 */
     if (!AHT10_Init(&aht10)) {
-        printf("[ENV] ERRO AHT10\n");
+        printf("[ENV] ERRO: Falha ao inicializar AHT10\n");
         vTaskDelete(NULL);
     }
 
-    //printf("[ENV] Inicializando BH1750...\n");
+    /* Inicializa BH1750 */
     bh1750_init(I2C_PORT_ENV);
+
+    /* Período ideal de amostragem */
+    const TickType_t sample_period = pdMS_TO_TICKS(2000);
+    TickType_t last_wake = xTaskGetTickCount();
 
     while (1)
     {
         env_sensor_data_t data = {0};
 
+        /* AHT10: temperatura e umidade */
         if (AHT10_ReadTemperatureHumidity(&aht10,
                                           &data.temperature,
                                           &data.humidity))
         {
+            /* BH1750: luminosidade */
             float lux = bh1750_read_lux(I2C_PORT_ENV);
-            data.lux = (lux >= 0.0f) ? lux : -1.0f;
+            data.lux = (lux >= 0.0f) ? lux : data.lux;
 
+            /* Publica sempre o último valor */
             xQueueOverwrite(envQueue, &data);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        /* Loop periódico estável (sem drift) */
+        vTaskDelayUntil(&last_wake, sample_period);
     }
 }
+

@@ -56,6 +56,8 @@ add_executable(energy_monitoring
         lib/ui_energy/ui_energy_task.c
         lib/mqtt_aggregator/mqtt_aggregator.c
         lib/ui_energy/ui_environment.c
+        lib/web_server/web_server_task.c
+        lib/web_server/web_pages.c
 )
 
 pico_set_program_name(energy_monitoring "energy_monitoring")
@@ -90,6 +92,7 @@ target_include_directories(energy_monitoring PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/lib/payload_builder
         ${CMAKE_CURRENT_LIST_DIR}/lib/pzem_task
         ${CMAKE_CURRENT_LIST_DIR}/lib/mqtt_aggregator
+        ${CMAKE_CURRENT_LIST_DIR}/lib/web_server
 )
 
 # Add any user requested libraries
