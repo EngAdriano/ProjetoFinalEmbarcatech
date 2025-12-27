@@ -63,3 +63,16 @@ bool auth_save(const char *user, const char *pass)
 
     return true;
 }
+
+void auth_factory_reset(void)
+{
+    uint8_t ff[EEPROM_MAX_LEN];
+    memset(ff, 0xFF, EEPROM_MAX_LEN);
+
+    at24c32_init();
+
+    at24c32_write_block(EEPROM_ADDR_USER, ff, EEPROM_MAX_LEN);
+    at24c32_write_block(EEPROM_ADDR_PASS, ff, EEPROM_MAX_LEN);
+
+    printf("[AUTH] Factory reset executado\n");
+}

@@ -41,6 +41,8 @@ int main(void)
 {
     stdio_init_all();
 
+    factory_button_init();
+
     /* ==== SPI / Display ==== */
     spi_init(SPI_PORT, 4000 * 1000);
     gpio_set_function(LCD_SCK, GPIO_FUNC_SPI);
@@ -100,6 +102,8 @@ int main(void)
     xTaskCreate(vTaskDisplay,         "DISPLAY",  4096, NULL, 1, NULL);
     xTaskCreate(env_sensors_task,     "ENV_SENS", 2048, NULL, 3, NULL);
     xTaskCreate(task_time, "TIME", 1024, NULL, 2, NULL);
+
+    xTaskCreate(vTaskFactoryReset, "FactoryReset", 1024, NULL, tskIDLE_PRIORITY + 1, NULL);
 
     vTaskStartScheduler();
 

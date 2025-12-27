@@ -22,11 +22,19 @@
 #include "auth_storage.h"
 #include "sha256.h"
 
+#include "hardware/watchdog.h"
+
+
 /* =====================================================
  * Configurações
  * ===================================================== */
 #define WEB_PORT 80
 #define SESSION_TIMEOUT_MS   (5 * 60 * 1000)   // 5 minutos
+
+// Força reset de credenciais ao manter o botão pressionado
+#define FACTORY_RESET_GPIO 6
+#define FACTORY_RESET_TIME_MS 5000
+
 
 /* =====================================================
  * Controle de sessão
@@ -348,14 +356,6 @@ void vTaskWebServer(void *pv)
     vTaskDelay(pdMS_TO_TICKS(3000));
 
     auth_load(login_user, login_pass_hash);
-
-    /*
-    printf("[AUTH] Usuario EEPROM: '%s'\n", login_user);
-    printf("[AUTH] Hash EEPROM: ");
-    for (int i = 0; i < 32; i++)
-        printf("%02X", login_pass_hash[i]);
-    printf("\n");
-    */
    
     struct tcp_pcb *pcb = tcp_new();
     if (!pcb)
@@ -373,5 +373,50 @@ void vTaskWebServer(void *pv)
     while (true)
     {
         vTaskDelay(pdMS_TO_TICKS(10000));
+    }
+}
+
+/* =====================================================
+ * Inicializa GPIO do botão de reset de fábrica
+ * ===================================================== */
+void factory_button_init(void)
+{
+    gpio_init(FACTORY_RESET_GPIO);
+    gpio_set_dir(FACTORY_RESET_GPIO, GPIO_IN);
+    gpio_pull_up(FACTORY_RESET_GPIO);   // botão para GND
+}
+
+/* =====================================================
+ * Task de Reset de Fábrica
+ * ===================================================== */
+
+void vTaskFactoryReset(void *pv)
+{
+    (void) pv;
+
+    while (true)
+    {
+        if (gpio_get(FACTORY_RESET_GPIO) == 0) // pressionado
+        {
+            TickType_t start = xTaskGetTickCount();
+
+            while (gpio_get(FACTORY_RESET_GPIO) == 0)
+            {
+                if ((xTaskGetTickCount() - start) >
+                    pdMS_TO_TICKS(FACTORY_RESET_TIME_MS))
+                {
+                    printf("[FACTORY] Reset solicitado\n");
+
+                    auth_factory_reset();
+
+                    // Opcional: reinicia o sistema
+                    sleep_ms(500);
+                    watchdog_reboot(0, 0, 0);
+                }
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
